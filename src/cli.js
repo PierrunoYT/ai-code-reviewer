@@ -277,9 +277,139 @@ index 0000000..abc1234
     }
   });
 
+// Input validation functions for CLI security
+function validateCliInputs(options) {
+  // Validate date format for --since and --until
+  if (options.since) {
+    validateDateFormat(options.since, 'since');
+  }
+  if (options.until) {
+    validateDateFormat(options.until, 'until');
+  }
+  
+  // Validate author name
+  if (options.author) {
+    validateAuthorName(options.author);
+  }
+  
+  // Validate branch name
+  if (options.branch) {
+    validateBranchName(options.branch);
+  }
+  
+  // Validate markdown directory path
+  if (options.markdownDir) {
+    validateMarkdownDirectory(options.markdownDir);
+  }
+  
+  // Validate numeric limits
+  if (options.maxCommits) {
+    validateMaxCommits(options.maxCommits);
+  }
+}
+
+function validateDateFormat(date, field) {
+  if (typeof date !== 'string' || date.length > 20) {
+    throw new Error(`Invalid ${field} date: must be a string with max 20 characters`);
+  }
+  
+  // Strict YYYY-MM-DD format validation
+  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!dateRegex.test(date)) {
+    throw new Error(`Invalid ${field} date format: must be YYYY-MM-DD`);
+  }
+  
+  // Validate it's a real date
+  const parsedDate = new Date(date);
+  if (isNaN(parsedDate.getTime()) || parsedDate.toISOString().substr(0, 10) !== date) {
+    throw new Error(`Invalid ${field} date: not a valid calendar date`);
+  }
+  
+  // Prevent extremely old or future dates (security against DoS)
+  const year = parsedDate.getFullYear();
+  if (year < 1990 || year > 2030) {
+    throw new Error(`Invalid ${field} date: year must be between 1990 and 2030`);
+  }
+}
+
+function validateAuthorName(author) {
+  if (typeof author !== 'string') {
+    throw new Error('Invalid author: must be a string');
+  }
+  
+  if (author.length === 0 || author.length > 100) {
+    throw new Error('Invalid author: must be 1-100 characters long');
+  }
+  
+  // Allow letters, numbers, spaces, common punctuation, and email format
+  const authorRegex = /^[a-zA-Z0-9\s\-_.@<>()]+$/;
+  if (!authorRegex.test(author)) {
+    throw new Error('Invalid author: contains unauthorized characters');
+  }
+  
+  // Prevent potential injection patterns
+  if (author.includes('..') || author.includes('\\') || author.includes('`') || author.includes('$')) {
+    throw new Error('Invalid author: contains potentially dangerous characters');
+  }
+}
+
+function validateBranchName(branch) {
+  if (typeof branch !== 'string') {
+    throw new Error('Invalid branch: must be a string');
+  }
+  
+  if (branch.length === 0 || branch.length > 50) {
+    throw new Error('Invalid branch: must be 1-50 characters long');
+  }
+  
+  // Git branch name validation - no spaces, certain special chars
+  const branchRegex = /^[a-zA-Z0-9\-_./]+$/;
+  if (!branchRegex.test(branch)) {
+    throw new Error('Invalid branch: contains unauthorized characters');
+  }
+  
+  // Prevent path traversal and injection
+  if (branch.includes('..') || branch.includes('\\') || branch.startsWith('-') || branch.includes('`')) {
+    throw new Error('Invalid branch: contains potentially dangerous patterns');
+  }
+}
+
+function validateMarkdownDirectory(dir) {
+  if (typeof dir !== 'string') {
+    throw new Error('Invalid markdown directory: must be a string');
+  }
+  
+  if (dir.length === 0 || dir.length > 200) {
+    throw new Error('Invalid markdown directory: must be 1-200 characters long');
+  }
+  
+  // Resolve and validate path to prevent traversal
+  const resolvedPath = path.resolve(dir);
+  const cwd = process.cwd();
+  
+  // Ensure the resolved path is within current working directory or a subdirectory
+  if (!resolvedPath.startsWith(cwd)) {
+    throw new Error('Invalid markdown directory: path traversal not allowed');
+  }
+  
+  // Prevent dangerous characters
+  if (dir.includes('..') || dir.includes('\\\\') || dir.includes('`') || dir.includes('$')) {
+    throw new Error('Invalid markdown directory: contains potentially dangerous characters');
+  }
+}
+
+function validateMaxCommits(maxCommits) {
+  const num = parseInt(maxCommits, 10);
+  if (isNaN(num) || num < 1 || num > 1000) {
+    throw new Error('Invalid max-commits: must be a number between 1 and 1000');
+  }
+}
+
 // This function is now replaced by the shared configuration loader
 // but kept for backward compatibility if needed
 function loadConfig(options) {
+  // Validate all CLI inputs before processing
+  validateCliInputs(options);
   return loadConfiguration(options);
 }
 

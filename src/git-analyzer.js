@@ -135,6 +135,9 @@ export class GitAnalyzer {
 
   async getAllCommits(options = {}) {
     try {
+      // Validate all input options for security
+      this.validateCommitHistoryOptions(options);
+      
       const logOptions = {
         format: {
           hash: '%H',
@@ -145,26 +148,30 @@ export class GitAnalyzer {
         }
       };
 
-      // Add branch/ref specification
+      // Add branch/ref specification with validation
       if (options.branch && options.branch !== 'HEAD') {
+        this.validateCommitHash(options.branch); // Reuse existing validation
         logOptions.from = options.branch;
       }
 
-      // Add date filters
+      // Add date filters with validation
       if (options.since) {
+        this.validateDateOption(options.since, 'since');
         logOptions['--since'] = options.since;
       }
       if (options.until) {
+        this.validateDateOption(options.until, 'until');
         logOptions['--until'] = options.until;
       }
 
-      // Add author filter
+      // Add author filter with validation
       if (options.author) {
+        this.validateAuthorOption(options.author);
         logOptions.author = options.author;
       }
 
-      // Set maximum number of commits
-      const maxCommits = parseInt(options.maxCommits || '100');
+      // Set maximum number of commits with validation
+      const maxCommits = this.validateMaxCommitsOption(options.maxCommits || '100');
       logOptions.maxCount = maxCommits;
 
       const log = await this.git.log(logOptions);
@@ -244,6 +251,103 @@ export class GitAnalyzer {
     // Allow reasonable file paths
     if (!filePath.match(/^[a-zA-Z0-9_\-\/\.]+$/)) {
       throw new Error('Invalid characters in file path');
+    }
+  }
+
+  // Additional validation methods for commit history options
+  validateCommitHistoryOptions(options) {
+    if (!options || typeof options !== 'object') {
+      throw new Error('Invalid options object');
+    }
+    
+    // Check for suspicious properties that shouldn't be there
+    const allowedProperties = ['branch', 'since', 'until', 'author', 'maxCommits'];
+    const providedProperties = Object.keys(options);
+    
+    for (const prop of providedProperties) {
+      if (!allowedProperties.includes(prop)) {
+        throw new Error(`Unauthorized option: ${prop}`);
+      }
+    }
+  }
+
+  validateDateOption(date, field) {
+    if (!date || typeof date !== 'string') {
+      throw new Error(`Invalid ${field} date: must be a non-empty string`);
+    }
+    
+    if (date.length > 20) {
+      throw new Error(`Invalid ${field} date: too long`);
+    }
+    
+    // Strict YYYY-MM-DD format validation
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(date)) {
+      throw new Error(`Invalid ${field} date format: must be YYYY-MM-DD`);
+    }
+    
+    // Prevent injection attempts
+    if (date.includes('`') || date.includes('$') || date.includes(';') || date.includes('|')) {
+      throw new Error(`Invalid ${field} date: contains dangerous characters`);
+    }
+  }
+
+  validateAuthorOption(author) {
+    if (!author || typeof author !== 'string') {
+      throw new Error('Invalid author: must be a non-empty string');
+    }
+    
+    if (author.length > 100) {
+      throw new Error('Invalid author: too long (max 100 characters)');
+    }
+    
+    // Allow reasonable author formats: Name, Name <email>, etc.
+    const authorRegex = /^[a-zA-Z0-9\s\-_.@<>()]+$/;
+    if (!authorRegex.test(author)) {
+      throw new Error('Invalid author: contains unauthorized characters');
+    }
+    
+    // Prevent injection attempts
+    if (author.includes('`') || author.includes('$') || author.includes(';') || author.includes('|') || author.includes('..')) {
+      throw new Error('Invalid author: contains dangerous patterns');
+    }
+  }
+
+  validateMaxCommitsOption(maxCommits) {
+    const num = parseInt(maxCommits, 10);
+    if (isNaN(num) || num < 1) {
+      throw new Error('Invalid maxCommits: must be a positive number');
+    }
+    
+    if (num > 1000) {
+      throw new Error('Invalid maxCommits: maximum 1000 commits allowed');
+    }
+    
+    return num;
+  }
+
+  // Enhanced repository state validation
+  async validateRepositoryState() {
+    try {
+      // Check if .git directory exists and is accessible
+      const isRepo = await this.git.checkIsRepo();
+      if (!isRepo) {
+        throw new Error('Not a valid git repository');
+      }
+      
+      // Check for suspicious git configuration that might indicate compromise
+      const config = await this.git.listConfig();
+      
+      // Look for suspicious hooks or configurations
+      for (const item of config.all) {
+        if (item.key.includes('hook') && item.value) {
+          console.warn(`Git hook detected: ${item.key} = ${item.value}`);
+        }
+      }
+      
+      return true;
+    } catch (error) {
+      throw new Error(`Repository validation failed: ${error.message}`);
     }
   }
 }
