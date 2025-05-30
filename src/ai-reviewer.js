@@ -17,6 +17,16 @@ export class AIReviewer {
     this.minRequestInterval = 1000; // 1 second between requests
     this.maxRequestsPerMinute = 60;
     this.requestHistory = [];
+    
+    // API endpoints allowlist for SSRF protection
+    this.allowedEndpoints = {
+      'openai': ['https://api.openai.com/v1/chat/completions'],
+      'anthropic': [
+        'https://api.anthropic.com/v1/messages',
+        'https://api.anthropic.com/v1/messages/batches'
+      ],
+      'google': ['https://generativelanguage.googleapis.com/v1beta/models/']
+    };
   }
 
   getDefaultModel() {
@@ -169,16 +179,11 @@ Be constructive, specific, and provide actionable feedback. Focus on the most im
       ];
     }
 
-    const response = await axios.post(
-      'https://api.openai.com/v1/chat/completions',
-      requestBody,
-      {
-        headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
+    const url = this.getValidatedEndpoint('openai', 'https://api.openai.com/v1/chat/completions');
+    const response = await this.makeSecureRequest(url, requestBody, {
+      'Authorization': `Bearer ${this.apiKey}`,
+      'Content-Type': 'application/json'
+    });
 
     return response.data.choices[0].message.content;
   }
@@ -224,11 +229,8 @@ Be constructive, specific, and provide actionable feedback. Focus on the most im
       'Content-Type': 'application/json'
     };
 
-    const response = await axios.post(
-      'https://api.anthropic.com/v1/messages',
-      requestBody,
-      { headers }
-    );
+    const url = this.getValidatedEndpoint('anthropic', 'https://api.anthropic.com/v1/messages');
+    const response = await this.makeSecureRequest(url, requestBody, headers);
 
     // Handle response - extract text content from various block types
     if (response.data.content && Array.isArray(response.data.content)) {
@@ -275,15 +277,11 @@ Be constructive, specific, and provide actionable feedback. Focus on the most im
       }
     }
 
-    const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`,
-      requestBody,
-      {
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      }
-    );
+    const baseUrl = this.getValidatedEndpoint('google', 'https://generativelanguage.googleapis.com/v1beta/models/');
+    const url = `${baseUrl}${this.model}:generateContent?key=${this.apiKey}`;
+    const response = await this.makeSecureRequest(url, requestBody, {
+      'Content-Type': 'application/json'
+    });
 
     // Handle response - extract text content, skipping thinking parts
     if (response.data.candidates && response.data.candidates[0].content.parts) {
@@ -343,8 +341,15 @@ Be constructive, specific, and provide actionable feedback. Focus on the most im
     };
   }
 
-  // Batch processing for multiple commits
+  // Batch processing for multiple commits with memory management
   async reviewMultipleCommits(commits, diffs) {
+    // Memory usage check before processing large batches
+    const estimatedMemoryUsage = this.estimateMemoryUsage(commits, diffs);
+    if (estimatedMemoryUsage > 100 * 1024 * 1024) { // 100MB limit
+      console.warn('Large batch detected, using streaming processing');
+      return this.streamingBatchProcess(commits, diffs);
+    }
+
     // Check if batch processing is enabled and we have multiple commits
     if (this.config.enableBatchProcessing && this.provider === 'anthropic' && commits.length > 1) {
       try {
@@ -362,7 +367,46 @@ Be constructive, specific, and provide actionable feedback. Focus on the most im
       console.log(`Reviewing commit ${i + 1}/${commits.length}: ${commits[i].hash}`);
       const review = await this.reviewCode(diffs[i], commits[i]);
       reviews.push(review);
+      
+      // Trigger garbage collection for large batches
+      if (i % 10 === 0 && global.gc) {
+        global.gc();
+      }
     }
+    return reviews;
+  }
+
+  // Estimate memory usage for batch processing
+  estimateMemoryUsage(commits, diffs) {
+    const avgDiffSize = diffs.reduce((sum, diff) => sum + diff.length, 0) / diffs.length;
+    const avgCommitSize = JSON.stringify(commits).length / commits.length;
+    return (avgDiffSize + avgCommitSize) * commits.length * 2; // Factor of 2 for processing overhead
+  }
+
+  // Streaming batch process for large datasets
+  async streamingBatchProcess(commits, diffs) {
+    const batchSize = 5; // Smaller batches for memory efficiency
+    const reviews = [];
+    
+    for (let i = 0; i < commits.length; i += batchSize) {
+      const batch = commits.slice(i, i + batchSize);
+      const batchDiffs = diffs.slice(i, i + batchSize);
+      
+      console.log(`Processing memory-optimized batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(commits.length / batchSize)}`);
+      
+      // Process smaller batch
+      const batchReviews = await this.reviewMultipleCommits(batch, batchDiffs);
+      reviews.push(...batchReviews);
+      
+      // Clear memory between batches
+      if (global.gc) {
+        global.gc();
+      }
+      
+      // Brief pause to prevent overwhelming the system
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    
     return reviews;
   }
 
@@ -409,19 +453,12 @@ Be constructive, specific, and provide actionable feedback. Focus on the most im
     }));
 
     try {
-      const response = await axios.post(
-        'https://api.anthropic.com/v1/messages/batches',
-        {
-          requests: batchRequests
-        },
-        {
-          headers: {
-            'x-api-key': this.apiKey,
-            'anthropic-version': '2023-06-01',
-            'Content-Type': 'application/json'
-          }
-        }
-      );
+      const url = this.getValidatedEndpoint('anthropic', 'https://api.anthropic.com/v1/messages/batches');
+      const response = await this.makeSecureRequest(url, { requests: batchRequests }, {
+        'x-api-key': this.apiKey,
+        'anthropic-version': '2023-06-01',
+        'Content-Type': 'application/json'
+      });
 
       // Poll for completion and return results
       return this.pollBatchResults(response.data.id);
@@ -443,15 +480,14 @@ Be constructive, specific, and provide actionable feedback. Focus on the most im
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
-        const response = await axios.get(
-          `https://api.anthropic.com/v1/messages/batches/${batchId}`,
-          {
-            headers: {
-              'x-api-key': this.apiKey,
-              'anthropic-version': '2023-06-01'
-            }
+        const baseUrl = this.getValidatedEndpoint('anthropic', 'https://api.anthropic.com/v1/messages/batches');
+        const url = `${baseUrl}/${batchId}`;
+        const response = await axios.get(url, {
+          headers: {
+            'x-api-key': this.apiKey,
+            'anthropic-version': '2023-06-01'
           }
-        );
+        });
 
         const batch = response.data;
         console.log(`Batch status: ${batch.processing_status}, requests: ${JSON.stringify(batch.request_counts)}`);
@@ -667,5 +703,130 @@ Be constructive, specific, and provide actionable feedback. Focus on the most im
         }
         break;
     }
+  }
+
+  // SSRF protection - validate API endpoints
+  getValidatedEndpoint(provider, requestedUrl) {
+    const allowedUrls = this.allowedEndpoints[provider];
+    if (!allowedUrls) {
+      throw new Error(`Unsupported provider: ${provider}`);
+    }
+    
+    const isAllowed = allowedUrls.some(allowedUrl => 
+      requestedUrl.startsWith(allowedUrl)
+    );
+    
+    if (!isAllowed) {
+      throw new Error(`Unauthorized endpoint: ${requestedUrl}`);
+    }
+    
+    return requestedUrl;
+  }
+
+  // Secure HTTP request wrapper with improved error handling
+  async makeSecureRequest(url, data, headers, method = 'POST') {
+    try {
+      const config = {
+        method,
+        url,
+        headers: this.sanitizeHeaders(headers),
+        timeout: 30000, // 30 second timeout
+        maxRedirects: 0 // Prevent redirect-based attacks
+      };
+      
+      if (method === 'POST') {
+        config.data = data;
+      }
+      
+      const response = await axios(config);
+      return response;
+    } catch (error) {
+      // Sanitize error messages to prevent information leakage
+      throw new Error(this.sanitizeErrorMessage(error.message));
+    }
+  }
+
+  // Sanitize headers to prevent injection
+  sanitizeHeaders(headers) {
+    const sanitized = {};
+    for (const [key, value] of Object.entries(headers)) {
+      if (typeof key === 'string' && typeof value === 'string') {
+        // Remove potentially dangerous characters
+        const cleanKey = key.replace(/[^\w\-]/g, '');
+        const cleanValue = value.replace(/[\r\n\t]/g, '');
+        sanitized[cleanKey] = cleanValue;
+      }
+    }
+    return sanitized;
+  }
+
+  // Sanitize error messages to prevent sensitive information leakage
+  sanitizeErrorMessage(message) {
+    if (!message || typeof message !== 'string') {
+      return 'An error occurred during API request';
+    }
+    
+    // Remove sensitive patterns
+    return message
+      .replace(/sk-[a-zA-Z0-9\-_]+/g, '[API_KEY_REDACTED]') // Remove API keys
+      .replace(/Bearer\s+[a-zA-Z0-9\-_]+/g, '[AUTH_TOKEN_REDACTED]') // Remove bearer tokens
+      .replace(/https?:\/\/[^\s]+/g, '[URL_REDACTED]') // Remove URLs
+      .replace(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g, '[IP_REDACTED]') // Remove IP addresses
+      .slice(0, 200); // Limit message length
+  }
+
+  // Improved polling with exponential backoff
+  async pollBatchResults(batchId) {
+    const maxAttempts = 30;
+    let attempt = 0;
+    let backoffDelay = 2000; // Start with 2 seconds
+    const maxBackoffDelay = 30000; // Maximum 30 seconds
+    
+    while (attempt < maxAttempts) {
+      try {
+        const baseUrl = this.getValidatedEndpoint('anthropic', 'https://api.anthropic.com/v1/messages/batches');
+        const url = `${baseUrl}/${batchId}`;
+        const response = await axios.get(url, {
+          headers: {
+            'x-api-key': this.apiKey,
+            'anthropic-version': '2023-06-01'
+          },
+          timeout: 10000 // 10 second timeout for polling
+        });
+
+        if (response.data.status === 'completed') {
+          return response.data.results.map(result =>
+            this.parseResponse(result.response.body.content[0].text)
+          );
+        }
+
+        if (response.data.status === 'failed') {
+          throw new Error('Batch processing failed');
+        }
+
+        // Exponential backoff with jitter
+        const jitter = Math.random() * 1000;
+        const delay = Math.min(backoffDelay + jitter, maxBackoffDelay);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        
+        // Increase backoff for next attempt
+        backoffDelay = Math.min(backoffDelay * 1.5, maxBackoffDelay);
+        attempt++;
+        
+      } catch (error) {
+        const sanitizedError = this.sanitizeErrorMessage(error.message);
+        console.warn(`Batch polling attempt ${attempt + 1} failed: ${sanitizedError}`);
+        
+        if (attempt >= maxAttempts - 1) {
+          throw new Error('Batch processing timed out after maximum attempts');
+        }
+        
+        // Shorter backoff for network errors
+        await new Promise(resolve => setTimeout(resolve, Math.min(backoffDelay, 5000)));
+        attempt++;
+      }
+    }
+
+    throw new Error('Batch processing timed out');
   }
 }
