@@ -580,6 +580,139 @@ Total commits reviewed: 150
 
 Both commands integrate seamlessly with all AI providers and advanced features like web search, extended thinking, and citations, providing the same expert-level analysis across your entire development workflow.
 
+## ⚡ Batch Processing
+
+The AI reviewer includes advanced **batch processing** capabilities that dramatically improve efficiency and reduce costs when reviewing multiple commits.
+
+### What is Batch Processing?
+
+Instead of analyzing commits one-by-one sequentially, batch processing sends multiple commits to the AI provider simultaneously for parallel analysis. This is especially beneficial for:
+
+- `review-all-commits` with many commits
+- `review HEAD~10..HEAD` with multiple commits  
+- Large commit ranges and repository reviews
+
+### 🚀 Benefits
+
+| Benefit | Description | Impact |
+|---------|-------------|---------|
+| **💰 Cost Savings** | Up to 50% reduction in API costs (Anthropic) | Significant savings for large reviews |
+| **⚡ Speed** | Parallel processing vs sequential | 3-5x faster for multiple commits |
+| **🎯 Efficiency** | Optimized API usage and rate limiting | Better resource utilization |
+| **🔄 Reliability** | Built-in retry and error handling | More robust for large operations |
+
+### 📊 How It Works
+
+```bash
+# When you run this command with multiple commits:
+npx ai-reviewer review-all-commits --max-commits 10 --batch
+
+# You'll see status updates like:
+🚀 Using batch processing for faster reviews...
+📦 Processing batch 1/2
+Batch status: in_progress, requests: {"processing":5,"succeeded":0,"errored":0,"canceled":0,"expired":0}
+Batch status: ended, requests: {"processing":0,"succeeded":5,"errored":0,"canceled":0,"expired":0}
+```
+
+### 🔍 Understanding Batch Status Messages
+
+**Status Indicators:**
+- `in_progress` - Batch is being processed by AI
+- `ended` - Batch completed successfully
+- `canceling/canceled` - Batch was canceled
+- `failed` - Batch encountered errors
+
+**Request Counters:**
+- `processing: X` - Number of commits currently being analyzed
+- `succeeded: X` - Number of commits completed successfully
+- `errored: X` - Number of commits that failed analysis
+- `canceled: X` - Number of commits that were canceled
+- `expired: X` - Number of commits that timed out
+
+### ⏱️ Typical Processing Times
+
+| Batch Size | Expected Time | Use Case |
+|------------|---------------|----------|
+| 2-5 commits | 30-60 seconds | Feature branch review |
+| 6-15 commits | 1-3 minutes | Sprint retrospective |
+| 16-50 commits | 3-5 minutes | Release preparation |
+| 51+ commits | 5-10 minutes | Major version analysis |
+
+### 🎛️ Configuration Options
+
+**Enable/Disable Batch Processing:**
+```bash
+# Enable batch processing (default for multiple commits)
+npx ai-reviewer review-all-commits --batch
+
+# Disable batch processing (sequential mode)
+npx ai-reviewer review-all-commits --no-batch
+```
+
+**Configuration File:**
+```json
+{
+  "enableBatchProcessing": true,  // Enable batch processing
+  "batchSize": 5,                 // Commits per batch group
+  "retryAttempts": 3              // Retry failed batch requests
+}
+```
+
+### 🔧 Provider Support
+
+| Provider | Batch Support | Benefits |
+|----------|---------------|----------|
+| **Anthropic** | ✅ Full Support | 50% cost reduction, parallel processing |
+| **OpenAI** | ⚠️ Limited | Some efficiency gains |
+| **Google** | ❌ Not Available | Falls back to sequential processing |
+
+### 🛠️ Troubleshooting Batch Processing
+
+**If batch processing seems stuck:**
+1. **Check internet connection** - Batch processing requires stable connectivity
+2. **Wait patiently** - Large batches can take 5-10 minutes
+3. **Check API limits** - Ensure you haven't exceeded rate limits
+4. **Monitor status** - Processing status updates every 5 seconds
+
+**If batch processing fails:**
+```bash
+# Automatic fallback to sequential processing
+Batch processing failed, falling back to sequential: [error message]
+Processing 10 commits sequentially...
+```
+
+**Force sequential processing:**
+```bash
+# If you want to avoid batch processing entirely
+npx ai-reviewer review-all-commits --no-batch
+```
+
+### 💡 Best Practices
+
+**When to use batch processing:**
+- ✅ Multiple commits (3+ commits)
+- ✅ Historical analysis (`review-all-commits`)
+- ✅ Release preparation and audits
+- ✅ Team retrospectives
+
+**When to use sequential processing:**
+- ✅ Single commit reviews
+- ✅ Real-time development feedback
+- ✅ Unstable network connections
+- ✅ Debugging specific commit issues
+
+**Optimize batch performance:**
+```bash
+# Configure optimal batch size for your use case
+{
+  "batchSize": 10,           // Larger batches for better efficiency
+  "enableBatchProcessing": true,
+  "retryAttempts": 5         // More retries for reliability
+}
+```
+
+Batch processing makes the AI reviewer incredibly efficient for large-scale code analysis, turning what could be hours of sequential processing into minutes of parallel analysis! 🚀
+
 ## Enhanced Review Output
 
 The AI reviewer provides comprehensive analysis:
