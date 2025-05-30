@@ -2,6 +2,8 @@
 
 An intelligent code review system that analyzes your commits before creating pull requests. Uses AI to provide detailed feedback on code quality, security, performance, and best practices.
 
+> **⚠️ Warning**: Some features, particularly git hooks, have not been fully tested yet. Please test in a development environment before using in production.
+
 ## Features
 
 - 🤖 **Latest AI Models**: Uses GPT-4.1, Claude 4 Sonnet, Claude 3.7 Sonnet, and Gemini 2.5 Pro/Flash for intelligent code analysis
