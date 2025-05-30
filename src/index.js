@@ -766,6 +766,195 @@ ERROR: Could not read file - ${error.message}
     
     return markdown;
   }
+
+  async reviewAllCommits(options = {}) {
+    try {
+      console.log(chalk.blue('🔍 Analyzing repository commit history...'));
+
+      // Get repository stats first
+      const stats = await this.gitAnalyzer.getCommitStats();
+      console.log(chalk.gray(`📊 Repository contains ${stats.totalCommits} total commits by ${stats.authors.length} authors`));
+      
+      if (stats.dateRange.oldest && stats.dateRange.newest) {
+        console.log(chalk.gray(`📅 Date range: ${stats.dateRange.oldest.split('T')[0]} to ${stats.dateRange.newest.split('T')[0]}`));
+      }
+
+      const commits = await this.gitAnalyzer.getAllCommits(options);
+      if (commits.length === 0) {
+        console.log(chalk.yellow('No commits found to review with the specified filters.'));
+        return;
+      }
+
+      const maxCommits = parseInt(options.maxCommits || '100');
+      if (commits.length > maxCommits) {
+        console.log(chalk.yellow(`⚠️ Found ${commits.length} commits, limiting to ${maxCommits} most recent commits`));
+      }
+
+      console.log(chalk.blue(`Found ${commits.length} commit(s) to review`));
+
+      // Display filter summary if any filters were applied
+      if (options.since || options.until || options.author || options.branch !== 'HEAD') {
+        console.log(chalk.gray('Applied filters:'));
+        if (options.since) console.log(chalk.gray(`  • Since: ${options.since}`));
+        if (options.until) console.log(chalk.gray(`  • Until: ${options.until}`));
+        if (options.author) console.log(chalk.gray(`  • Author: ${options.author}`));
+        if (options.branch && options.branch !== 'HEAD') console.log(chalk.gray(`  • Branch: ${options.branch}`));
+      }
+
+      // Use batch processing if enabled and multiple commits
+      if (this.config.enableBatchProcessing && commits.length > 1) {
+        await this.reviewCommitsBatch(commits);
+      } else {
+        await this.reviewCommitsSequential(commits);
+      }
+
+      // Generate summary report
+      await this.generateCommitSummaryReport(commits, options);
+
+    } catch (error) {
+      console.error(chalk.red('❌ Error during commit history review:'), error.message);
+      process.exit(1);
+    }
+  }
+
+  async generateCommitSummaryReport(commits, options) {
+    console.log(chalk.green('\n📊 Generating commit history summary...'));
+    
+    // Analyze commit patterns
+    const authorCounts = {};
+    const dateCounts = {};
+    const messagePrefixes = {};
+    
+    commits.forEach(commit => {
+      // Author analysis
+      const author = commit.author.split(' <')[0];
+      authorCounts[author] = (authorCounts[author] || 0) + 1;
+      
+      // Date analysis (by month)
+      const monthKey = commit.date.substring(0, 7); // YYYY-MM
+      dateCounts[monthKey] = (dateCounts[monthKey] || 0) + 1;
+      
+      // Message prefix analysis (conventional commits)
+      const messagePrefix = commit.message.split(':')[0].toLowerCase();
+      if (messagePrefix.length < 20) { // Reasonable prefix length
+        messagePrefixes[messagePrefix] = (messagePrefixes[messagePrefix] || 0) + 1;
+      }
+    });
+
+    const summaryData = {
+      totalCommitsReviewed: commits.length,
+      authors: Object.entries(authorCounts).sort((a, b) => b[1] - a[1]),
+      monthlyActivity: Object.entries(dateCounts).sort(),
+      commitTypes: Object.entries(messagePrefixes).sort((a, b) => b[1] - a[1]).slice(0, 10)
+    };
+
+    // Display summary
+    console.log(chalk.blue('\n📋 Commit History Summary:'));
+    console.log(chalk.gray('─'.repeat(60)));
+    console.log(chalk.white(`Total commits reviewed: ${summaryData.totalCommitsReviewed}`));
+    
+    console.log(chalk.cyan('\n👥 Top Contributors:'));
+    summaryData.authors.slice(0, 5).forEach(([author, count], i) => {
+      console.log(chalk.cyan(`  ${i + 1}. ${author}: ${count} commits`));
+    });
+
+    console.log(chalk.magenta('\n📅 Monthly Activity:'));
+    summaryData.monthlyActivity.slice(-6).forEach(([month, count]) => {
+      console.log(chalk.magenta(`  ${month}: ${count} commits`));
+    });
+
+    console.log(chalk.yellow('\n🏷️ Common Commit Types:'));
+    summaryData.commitTypes.slice(0, 5).forEach(([type, count], i) => {
+      console.log(chalk.yellow(`  ${i + 1}. "${type}": ${count} commits`));
+    });
+
+    // Save summary to markdown if enabled
+    if (this.config.saveToMarkdown !== false) {
+      await this.saveCommitSummaryToMarkdown(summaryData, options);
+    }
+
+    console.log(chalk.green(`\n✅ All commits review completed! Analyzed ${commits.length} commits.`));
+  }
+
+  async saveCommitSummaryToMarkdown(summaryData, options) {
+    try {
+      const markdownContent = this.generateCommitSummaryMarkdown(summaryData, options);
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const filename = `${timestamp}-commit-history-summary.md`;
+      const outputDir = this.config.markdownOutputDir || './code-reviews';
+      
+      // Create output directory if it doesn't exist
+      if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+      }
+      
+      const filepath = path.join(outputDir, filename);
+      fs.writeFileSync(filepath, markdownContent, 'utf8');
+      
+      console.log(chalk.green(`💾 Commit summary saved to: ${filepath}`));
+    } catch (error) {
+      console.error(chalk.red('❌ Failed to save commit summary markdown file:'), error.message);
+    }
+  }
+
+  generateCommitSummaryMarkdown(summaryData, options) {
+    const timestamp = new Date().toISOString();
+    
+    let markdown = `# Commit History Review Summary\n\n`;
+    markdown += `**Generated:** ${timestamp}\n`;
+    markdown += `**Review Type:** All Commits Review\n`;
+    markdown += `**Total Commits Analyzed:** ${summaryData.totalCommitsReviewed}\n\n`;
+    
+    // Add applied filters
+    if (options.since || options.until || options.author || options.branch !== 'HEAD') {
+      markdown += `## 🔍 Applied Filters\n\n`;
+      if (options.since) markdown += `- **Since:** ${options.since}\n`;
+      if (options.until) markdown += `- **Until:** ${options.until}\n`;
+      if (options.author) markdown += `- **Author:** ${options.author}\n`;
+      if (options.branch && options.branch !== 'HEAD') markdown += `- **Branch:** ${options.branch}\n`;
+      markdown += `\n`;
+    }
+    
+    // Contributors
+    markdown += `## 👥 Contributors\n\n`;
+    markdown += `| Rank | Author | Commits | Percentage |\n`;
+    markdown += `|------|--------|---------|------------|\n`;
+    summaryData.authors.forEach(([author, count], i) => {
+      const percentage = ((count / summaryData.totalCommitsReviewed) * 100).toFixed(1);
+      markdown += `| ${i + 1} | ${author} | ${count} | ${percentage}% |\n`;
+    });
+    markdown += `\n`;
+    
+    // Monthly Activity
+    if (summaryData.monthlyActivity.length > 0) {
+      markdown += `## 📅 Monthly Activity\n\n`;
+      markdown += `| Month | Commits |\n`;
+      markdown += `|-------|----------|\n`;
+      summaryData.monthlyActivity.forEach(([month, count]) => {
+        markdown += `| ${month} | ${count} |\n`;
+      });
+      markdown += `\n`;
+    }
+    
+    // Commit Types
+    if (summaryData.commitTypes.length > 0) {
+      markdown += `## 🏷️ Commit Type Analysis\n\n`;
+      markdown += `| Rank | Type | Count | Percentage |\n`;
+      markdown += `|------|------|-------|------------|\n`;
+      summaryData.commitTypes.forEach(([type, count], i) => {
+        const percentage = ((count / summaryData.totalCommitsReviewed) * 100).toFixed(1);
+        markdown += `| ${i + 1} | \`${type}\` | ${count} | ${percentage}% |\n`;
+      });
+      markdown += `\n`;
+    }
+    
+    // Footer
+    markdown += `---\n\n`;
+    markdown += `*Generated by AI PR Reviewer using ${this.config.aiProvider} (${this.config.model})*\n`;
+    markdown += `*Individual commit reviews are saved in separate files in the same directory*\n`;
+    
+    return markdown;
+  }
 }
 
 // CLI usage

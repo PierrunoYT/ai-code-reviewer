@@ -17,6 +17,8 @@ An intelligent code review system that analyzes your commits before creating pul
 - 📊 **Advanced Scoring**: Quality scores with confidence levels
 - 🎯 **Highly Customizable**: Multiple provider configs and feature toggles
 - 📄 **Markdown Reports**: Automatic saving of detailed review reports in markdown format
+- 📁 **Repository-Wide Review**: Analyze entire codebase with smart file filtering
+- 📈 **Commit History Analysis**: Review all commits with statistical insights and trends
 - 🚀 **Easy Setup**: Simple CLI installation and configuration
 
 ## Installation
@@ -94,6 +96,39 @@ npm run install-hook
 
 # Run demo to see new features
 npm run demo
+```
+
+**Review entire repository:**
+```bash
+# Review all code files in repository
+npx ai-reviewer review-repo
+
+# Review with custom file patterns
+npx ai-reviewer review-repo --include "**/*.{js,py}" --exclude "test/**,*.min.js"
+
+# Limit number of files and save to custom directory
+npx ai-reviewer review-repo --max-files 20 --markdown-dir ./repo-reviews
+
+# Use advanced AI features for repository review
+npx ai-reviewer review-repo --web-search --extended-thinking --citations
+```
+
+**Review all commits:**
+```bash
+# Review all commits (max 100)
+npx ai-reviewer review-all-commits
+
+# Review commits with date range filter
+npx ai-reviewer review-all-commits --since 2024-01-01 --until 2024-12-31
+
+# Review commits by specific author
+npx ai-reviewer review-all-commits --author "John Doe" --max-commits 50
+
+# Review commits from specific branch with batch processing
+npx ai-reviewer review-all-commits --branch feature/new-feature --batch
+
+# Use advanced AI features for commit history review
+npx ai-reviewer review-all-commits --web-search --extended-thinking --citations
 ```
 
 ### Git Hooks
@@ -417,6 +452,134 @@ function login(username, password) {
 
 The analysis is **comprehensive, context-aware, and actionable** - providing expert-level code review insights with the latest security knowledge and best practices, far beyond simple syntax checking.
 
+## 🆕 Advanced Review Commands
+
+### Repository-Wide Code Review (`review-repo`)
+
+Analyze your entire codebase with AI-powered insights, perfect for code audits, onboarding new team members, or comprehensive security assessments.
+
+**Key Features:**
+- 🔍 **Smart File Discovery**: Automatically finds code files using configurable patterns
+- 📁 **Pattern Filtering**: Include/exclude files with glob-like patterns  
+- 📦 **Intelligent Grouping**: Groups files to optimize AI analysis quality
+- 🛡️ **Security Focus**: Comprehensive security analysis across entire codebase
+- 📊 **Detailed Reports**: Individual file group reviews plus summary analytics
+
+**Usage Examples:**
+```bash
+# Basic repository review
+npx ai-reviewer review-repo
+
+# Custom file patterns (Python and JavaScript only)
+npx ai-reviewer review-repo --include "**/*.{py,js}" --exclude "venv/**,node_modules/**"
+
+# Focused security audit with limited files
+npx ai-reviewer review-repo --max-files 25 --web-search --citations
+
+# Full enterprise audit with all advanced features
+npx ai-reviewer review-repo --extended-thinking --web-search --citations --markdown-dir ./audit-reports
+```
+
+**Command Options:**
+- `--include <patterns>`: File patterns to include (default: common code files)
+- `--exclude <patterns>`: File patterns to exclude (default: build dirs, tests, node_modules)
+- `--max-files <number>`: Maximum files to review (default: 50)
+- All standard AI options (provider, model, web-search, etc.)
+
+**Generated Reports:**
+- Detailed analysis for each file group (5 files per group)
+- Security vulnerability assessments
+- Code quality and maintainability insights
+- Performance optimization opportunities
+- Architecture and design pattern recommendations
+
+### Commit History Analysis (`review-all-commits`)
+
+Analyze your project's entire commit history to understand code evolution, identify patterns, and get comprehensive development insights.
+
+**Key Features:**
+- 📈 **Historical Analysis**: Review all commits with trends and patterns
+- 🔍 **Advanced Filtering**: Filter by date range, author, branch, and commit count
+- 📊 **Statistical Insights**: Contributor analysis, activity patterns, commit type analysis
+- ⚡ **Batch Processing**: Efficient processing of large commit histories
+- 📋 **Summary Reports**: Comprehensive analytics plus individual commit reviews
+
+**Usage Examples:**
+```bash
+# Review all recent commits (default: last 100)
+npx ai-reviewer review-all-commits
+
+# Date range analysis for quarterly review
+npx ai-reviewer review-all-commits --since 2024-01-01 --until 2024-03-31
+
+# Author-specific contribution analysis
+npx ai-reviewer review-all-commits --author "Jane Developer" --max-commits 50
+
+# Branch-specific development review
+npx ai-reviewer review-all-commits --branch feature/new-architecture --batch
+
+# Comprehensive audit with all AI features
+npx ai-reviewer review-all-commits --web-search --extended-thinking --citations --max-commits 200
+```
+
+**Command Options:**
+- `--max-commits <number>`: Maximum commits to review (default: 100)
+- `--since <date>`: Only review commits since date (YYYY-MM-DD)
+- `--until <date>`: Only review commits until date (YYYY-MM-DD)  
+- `--author <name>`: Only review commits by specific author
+- `--branch <name>`: Review commits from specific branch (default: HEAD)
+- `--batch/--no-batch`: Enable/disable batch processing
+- All standard AI options (provider, model, web-search, etc.)
+
+**Generated Analytics:**
+1. **Individual Commit Reviews**: Detailed AI analysis of each commit
+2. **Contributor Statistics**: Top contributors and their commit distribution
+3. **Activity Patterns**: Monthly/quarterly development activity trends
+4. **Commit Type Analysis**: Conventional commit pattern analysis (feat, fix, docs, etc.)
+5. **Quality Trends**: Code quality evolution over time
+6. **Security Timeline**: Security-related changes and improvements
+
+**Example Summary Output:**
+```
+📋 Commit History Summary:
+────────────────────────────────────────────────────────────
+Total commits reviewed: 150
+
+👥 Top Contributors:
+  1. Alice Johnson: 65 commits (43.3%)
+  2. Bob Smith: 45 commits (30.0%)
+  3. Carol Davis: 25 commits (16.7%)
+
+📅 Monthly Activity:
+  2024-01: 42 commits
+  2024-02: 38 commits  
+  2024-03: 35 commits
+
+🏷️ Common Commit Types:
+  1. "feat": 68 commits (45.3%)
+  2. "fix": 32 commits (21.3%)
+  3. "docs": 28 commits (18.7%)
+```
+
+### Use Cases for Advanced Commands
+
+**Repository Review (`review-repo`):**
+- 🔒 **Security Audits**: Comprehensive security assessment of entire codebase
+- 👋 **Onboarding**: Help new team members understand codebase architecture
+- 📋 **Code Quality Assessment**: Enterprise-grade code quality evaluation
+- 🎯 **Technical Debt Analysis**: Identify areas needing refactoring or improvement
+- 📊 **Compliance Reporting**: Generate compliance reports for security standards
+
+**Commit History Review (`review-all-commits`):**
+- 📈 **Development Analytics**: Understand team productivity and code evolution
+- 🎯 **Quality Trends**: Track code quality improvements over time
+- 👥 **Team Performance**: Analyze individual and team contribution patterns
+- 🔍 **Change Impact Analysis**: Understand the impact of major changes
+- 📋 **Project Retrospectives**: Data-driven insights for sprint/project reviews
+- 🚀 **Release Planning**: Identify high-risk changes before releases
+
+Both commands integrate seamlessly with all AI providers and advanced features like web search, extended thinking, and citations, providing the same expert-level analysis across your entire development workflow.
+
 ## Enhanced Review Output
 
 The AI reviewer provides comprehensive analysis:
@@ -530,6 +693,17 @@ npm run install-hook # Install git hooks
 npm test          # Run tests with sample code
 npm run demo      # Run demo showcasing enhanced features
 npm run config    # Generate enhanced configuration file (outputs to .ai-reviewer-config.json)
+```
+
+**Available CLI Commands:**
+```bash
+npx ai-reviewer review [range]           # Review specific commits or commit ranges
+npx ai-reviewer review-repo              # Review entire repository codebase
+npx ai-reviewer review-all-commits       # Review all commits in repository history
+npx ai-reviewer install-hooks            # Install git hooks for automated reviews
+npx ai-reviewer config                   # Generate configuration file
+npx ai-reviewer test                     # Test the AI reviewer with sample code
+npx ai-reviewer --help                   # Show all available commands and options
 ```
 
 ## Environment Variables

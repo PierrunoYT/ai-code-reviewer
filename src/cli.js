@@ -199,6 +199,39 @@ program
   });
 
 program
+  .command('review-all-commits')
+  .description('Review all commits in the repository')
+  .option('-c, --config <path>', 'Path to config file')
+  .option('--api-key <key>', 'AI API key')
+  .option('--provider <provider>', 'AI provider (openai, anthropic, google)', 'anthropic')
+  .option('--model <model>', 'AI model to use')
+  .option('--web-search', 'Enable web search for best practices')
+  .option('--extended-thinking', 'Enable extended thinking (Anthropic only)')
+  .option('--citations', 'Enable citations for recommendations')
+  .option('--batch', 'Enable batch processing for multiple commits')
+  .option('--no-batch', 'Disable batch processing')
+  .option('--save-markdown', 'Save reviews to markdown files')
+  .option('--no-save-markdown', 'Disable saving to markdown files')
+  .option('--markdown-dir <dir>', 'Directory to save markdown files')
+  .option('--include-diff', 'Include code diff in markdown files')
+  .option('--no-include-diff', 'Exclude code diff from markdown files')
+  .option('--max-commits <number>', 'Maximum number of commits to review', '100')
+  .option('--since <date>', 'Only review commits since this date (YYYY-MM-DD)')
+  .option('--until <date>', 'Only review commits until this date (YYYY-MM-DD)')
+  .option('--author <name>', 'Only review commits by this author')
+  .option('--branch <name>', 'Review commits from specific branch', 'HEAD')
+  .action(async (options) => {
+    try {
+      const config = loadConfig(options);
+      const app = new ReviewerApp(config);
+      await app.reviewAllCommits(options);
+    } catch (error) {
+      console.error(chalk.red('Error:'), error.message);
+      process.exit(1);
+    }
+  });
+
+program
   .command('test')
   .description('Test the AI reviewer with sample code')
   .action(async () => {
