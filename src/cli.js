@@ -172,6 +172,33 @@ program
   });
 
 program
+  .command('review-repo')
+  .description('Review the entire repository codebase')
+  .option('-c, --config <path>', 'Path to config file')
+  .option('--api-key <key>', 'AI API key')
+  .option('--provider <provider>', 'AI provider (openai, anthropic, google)', 'anthropic')
+  .option('--model <model>', 'AI model to use')
+  .option('--web-search', 'Enable web search for best practices')
+  .option('--extended-thinking', 'Enable extended thinking (Anthropic only)')
+  .option('--citations', 'Enable citations for recommendations')
+  .option('--save-markdown', 'Save reviews to markdown files')
+  .option('--no-save-markdown', 'Disable saving to markdown files')
+  .option('--markdown-dir <dir>', 'Directory to save markdown files')
+  .option('--include <patterns>', 'File patterns to include (comma-separated)', '**/*.{js,ts,jsx,tsx,py,java,cpp,c,go,rs,php,rb,cs,kt,swift}')
+  .option('--exclude <patterns>', 'File patterns to exclude (comma-separated)', 'node_modules/**,dist/**,build/**,*.min.js,*.test.*,*.spec.*')
+  .option('--max-files <number>', 'Maximum number of files to review', '50')
+  .action(async (options) => {
+    try {
+      const config = loadConfig(options);
+      const app = new ReviewerApp(config);
+      await app.reviewRepository(options);
+    } catch (error) {
+      console.error(chalk.red('Error:'), error.message);
+      process.exit(1);
+    }
+  });
+
+program
   .command('test')
   .description('Test the AI reviewer with sample code')
   .action(async () => {
