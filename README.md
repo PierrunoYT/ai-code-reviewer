@@ -2,7 +2,17 @@
 
 An intelligent code review system that analyzes your commits before creating pull requests. Uses AI to provide detailed feedback on code quality, security, performance, and best practices.
 
-> **⚠️ Warning**: Some features, particularly git hooks, have not been fully tested yet. Please test in a development environment before using in production.
+> [!WARNING]
+> **Untested Features & Security Notice**
+> 
+> The following features have not been fully tested yet and should be used with caution:
+> - **Git hooks** (pre-commit, pre-push) - May execute arbitrary code
+> - **Automated dependency scanning** 
+> - **CI/CD integrations**
+> 
+> **🔒 Security Warning**: Git hooks can execute arbitrary code and pose security risks. Recent vulnerabilities (CVE-2024-32002, CVE-2024-32004) have shown that malicious repositories can exploit git hooks for remote code execution. Always review git hooks before enabling them in production environments.
+> 
+> **Recommendation**: Test thoroughly in development environments and review all git hook code before production use.
 
 ## Features
 
@@ -133,17 +143,46 @@ npx ai-reviewer review-all-commits --web-search --extended-thinking --citations
 
 ### Git Hooks
 
-> **⚠️ Warning**: The git hooks functionality has not been fully tested yet. Use with caution in production environments and consider testing the hooks in a development environment first.
+> [!CAUTION]
+> **Security & Testing Notice**
+> 
+> **🚨 Git hooks execute arbitrary code** and pose security risks. Recent vulnerabilities (CVE-2024-32002, CVE-2024-32004) have shown that malicious repositories can exploit git hooks for remote code execution.
+> 
+> **Before enabling hooks:**
+> - Review all hook code in `.git/hooks/` directory
+> - Test thoroughly in isolated development environments
+> - Ensure your repository is from a trusted source
+> - Consider running in sandboxed environments
+> 
+> **Note**: This functionality has not been fully tested yet. Use with extreme caution in production.
 
 Once installed, the hooks will automatically:
 
 - **Pre-commit**: Review staged changes before each commit
 - **Pre-push**: Review all commits being pushed to remote
 
+**Security best practices:**
+```bash
+# Always review hooks before enabling
+ls -la .git/hooks/
+cat .git/hooks/pre-commit
+cat .git/hooks/pre-push
+
+# Test in isolated environment first
+git clone <repo> /tmp/test-repo
+cd /tmp/test-repo && npm run install-hook
+```
+
 **Bypass hooks when needed:**
 ```bash
 git commit --no-verify  # Skip pre-commit hook
 git push --no-verify    # Skip pre-push hook
+```
+
+**Emergency hook removal:**
+```bash
+# Remove all hooks if needed
+rm .git/hooks/pre-commit .git/hooks/pre-push
 ```
 
 ### Configuration
