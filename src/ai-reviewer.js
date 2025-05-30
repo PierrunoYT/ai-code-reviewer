@@ -3,12 +3,20 @@ import axios from 'axios';
 export class AIReviewer {
   constructor(config) {
     this.config = config;
+    this.validateConfig(config);
     this.apiKey = config.apiKey;
     this.provider = config.aiProvider || 'openai';
     this.model = config.model || this.getDefaultModel();
     this.enableWebSearch = config.enableWebSearch || false;
     this.enableExtendedThinking = config.enableExtendedThinking || false;
     this.enableCitations = config.enableCitations || false;
+    
+    // Rate limiting
+    this.requestQueue = [];
+    this.lastRequestTime = 0;
+    this.minRequestInterval = 1000; // 1 second between requests
+    this.maxRequestsPerMinute = 60;
+    this.requestHistory = [];
   }
 
   getDefaultModel() {
@@ -25,9 +33,15 @@ export class AIReviewer {
   }
 
   async reviewCode(diff, commit) {
+    // Validate inputs
+    this.validateInputs(diff, commit);
+    
     if (!this.apiKey) {
       throw new Error('AI API key not found. Set AI_API_KEY environment variable.');
     }
+
+    // Apply rate limiting
+    await this.applyRateLimit();
 
     const prompt = this.buildPrompt(diff, commit);
     
@@ -56,15 +70,20 @@ export class AIReviewer {
   }
 
   buildPrompt(diff, commit) {
+    // Sanitize inputs to prevent prompt injection
+    const sanitizedMessage = this.sanitizeText(commit.message);
+    const sanitizedAuthor = this.sanitizeText(commit.author);
+    const sanitizedDiff = this.sanitizeDiff(diff);
+    
     const basePrompt = `You are an expert code reviewer. Please review the following git commit and provide feedback.
 
-Commit Message: ${commit.message}
-Author: ${commit.author}
+Commit Message: ${sanitizedMessage}
+Author: ${sanitizedAuthor}
 Date: ${commit.date}
 
 Code Changes:
 \`\`\`diff
-${diff}
+${sanitizedDiff}
 \`\`\`
 
 Please analyze this commit and provide a structured review focusing on:
@@ -539,6 +558,114 @@ Be constructive, specific, and provide actionable feedback. Focus on the most im
         const delay = Math.pow(2, attempt) * 1000;
         await new Promise(resolve => setTimeout(resolve, delay));
       }
+    }
+  }
+
+  // Validation methods
+  validateConfig(config) {
+    if (!config || typeof config !== 'object') {
+      throw new Error('Invalid configuration object');
+    }
+    
+    if (config.aiProvider && !['openai', 'anthropic', 'google'].includes(config.aiProvider)) {
+      throw new Error('Invalid AI provider. Must be one of: openai, anthropic, google');
+    }
+    
+    if (config.maxTokens && (typeof config.maxTokens !== 'number' || config.maxTokens < 1 || config.maxTokens > 100000)) {
+      throw new Error('Invalid maxTokens. Must be a number between 1 and 100000');
+    }
+  }
+
+  validateInputs(diff, commit) {
+    if (!diff || typeof diff !== 'string') {
+      throw new Error('Invalid diff content');
+    }
+    
+    if (!commit || typeof commit !== 'object') {
+      throw new Error('Invalid commit object');
+    }
+    
+    if (!commit.message || typeof commit.message !== 'string') {
+      throw new Error('Invalid commit message');
+    }
+    
+    if (!commit.author || typeof commit.author !== 'string') {
+      throw new Error('Invalid commit author');
+    }
+    
+    // Prevent extremely large diffs
+    if (diff.length > 100000) {
+      throw new Error('Diff too large. Maximum 100KB allowed');
+    }
+  }
+
+  sanitizeText(text) {
+    if (!text || typeof text !== 'string') return '';
+    
+    // Remove potential prompt injection attempts
+    return text
+      .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
+      .replace(/```/g, '\\`\\`\\`') // Escape code blocks
+      .replace(/\${/g, '\\${') // Escape template literals
+      .slice(0, 1000); // Limit length
+  }
+
+  sanitizeDiff(diff) {
+    if (!diff || typeof diff !== 'string') return '';
+    
+    // Basic sanitization for diff content
+    return diff
+      .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
+      .slice(0, 50000); // Limit diff size
+  }
+
+  // Rate limiting
+  async applyRateLimit() {
+    const now = Date.now();
+    
+    // Clean old requests from history
+    this.requestHistory = this.requestHistory.filter(time => now - time < 60000);
+    
+    // Check rate limit
+    if (this.requestHistory.length >= this.maxRequestsPerMinute) {
+      const waitTime = 60000 - (now - this.requestHistory[0]);
+      console.warn(`Rate limit reached. Waiting ${waitTime}ms...`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+    
+    // Ensure minimum interval between requests
+    const timeSinceLastRequest = now - this.lastRequestTime;
+    if (timeSinceLastRequest < this.minRequestInterval) {
+      const waitTime = this.minRequestInterval - timeSinceLastRequest;
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+    
+    this.lastRequestTime = Date.now();
+    this.requestHistory.push(this.lastRequestTime);
+  }
+
+  validateApiKey() {
+    if (!this.apiKey || typeof this.apiKey !== 'string') {
+      throw new Error('Invalid API key');
+    }
+    
+    // Basic API key format validation
+    switch (this.provider) {
+      case 'openai':
+        if (!this.apiKey.startsWith('sk-')) {
+          throw new Error('Invalid OpenAI API key format');
+        }
+        break;
+      case 'anthropic':
+        if (!this.apiKey.startsWith('sk-ant-')) {
+          throw new Error('Invalid Anthropic API key format');
+        }
+        break;
+      case 'google':
+        if (this.apiKey.length < 20) {
+          throw new Error('Invalid Google API key format');
+        }
+        break;
     }
   }
 }

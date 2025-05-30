@@ -2,14 +2,37 @@ import { simpleGit } from 'simple-git';
 
 export class GitAnalyzer {
   constructor(repoPath = '.') {
+    // Validate repo path to prevent path traversal
+    this.validateRepoPath(repoPath);
     this.git = simpleGit(repoPath);
+  }
+
+  validateRepoPath(repoPath) {
+    if (!repoPath || typeof repoPath !== 'string') {
+      throw new Error('Invalid repository path');
+    }
+    
+    // Prevent path traversal attacks
+    const normalizedPath = repoPath.replace(/\\/g, '/');
+    if (normalizedPath.includes('../') || normalizedPath.includes('..\\')) {
+      throw new Error('Path traversal attempts are not allowed');
+    }
+    
+    // Only allow relative paths or current directory
+    if (repoPath !== '.' && !repoPath.match(/^[a-zA-Z0-9_\-\/\.]+$/)) {
+      throw new Error('Invalid characters in repository path');
+    }
   }
 
   async getCommits(range = 'HEAD~1..HEAD') {
     try {
+      // Validate commit range to prevent injection
+      this.validateCommitRange(range);
+      
+      const rangeParts = range.split('..');
       const log = await this.git.log({
-        from: range.split('..')[0],
-        to: range.split('..')[1] || 'HEAD',
+        from: rangeParts[0],
+        to: rangeParts[1] || 'HEAD',
         format: {
           hash: '%H',
           date: '%ai',
@@ -33,6 +56,9 @@ export class GitAnalyzer {
 
   async getCommitDiff(commitHash) {
     try {
+      // Validate commit hash
+      this.validateCommitHash(commitHash);
+      
       const diff = await this.git.show([
         commitHash,
         '--pretty=format:',
@@ -53,6 +79,9 @@ export class GitAnalyzer {
 
   async getChangedFiles(commitHash) {
     try {
+      // Validate commit hash
+      this.validateCommitHash(commitHash);
+      
       const result = await this.git.show([
         '--name-only',
         '--pretty=format:',
@@ -94,6 +123,10 @@ export class GitAnalyzer {
 
   async getFileContent(filePath, commitHash = 'HEAD') {
     try {
+      // Validate inputs
+      this.validateFilePath(filePath);
+      this.validateCommitHash(commitHash);
+      
       return await this.git.show([`${commitHash}:${filePath}`]);
     } catch (error) {
       throw new Error(`Failed to get file content: ${error.message}`);
@@ -170,6 +203,47 @@ export class GitAnalyzer {
       return stats;
     } catch (error) {
       throw new Error(`Failed to get commit stats: ${error.message}`);
+    }
+  }
+
+  validateCommitHash(hash) {
+    if (!hash || typeof hash !== 'string') {
+      throw new Error('Invalid commit hash');
+    }
+    
+    // Allow HEAD, branch names, and SHA hashes
+    if (hash === 'HEAD' || hash.match(/^[a-zA-Z0-9_\-\/]+$/) || hash.match(/^[a-f0-9]{7,40}$/)) {
+      return;
+    }
+    
+    throw new Error('Invalid commit hash format');
+  }
+
+  validateCommitRange(range) {
+    if (!range || typeof range !== 'string') {
+      throw new Error('Invalid commit range');
+    }
+    
+    // Allow standard git range formats
+    if (!range.match(/^[a-zA-Z0-9_\-\/\.~\^]+(\.\.[a-zA-Z0-9_\-\/\.~\^]+)?$/)) {
+      throw new Error('Invalid commit range format');
+    }
+  }
+
+  validateFilePath(filePath) {
+    if (!filePath || typeof filePath !== 'string') {
+      throw new Error('Invalid file path');
+    }
+    
+    // Prevent path traversal
+    const normalizedPath = filePath.replace(/\\/g, '/');
+    if (normalizedPath.includes('../') || normalizedPath.includes('..\\')) {
+      throw new Error('Path traversal attempts are not allowed');
+    }
+    
+    // Allow reasonable file paths
+    if (!filePath.match(/^[a-zA-Z0-9_\-\/\.]+$/)) {
+      throw new Error('Invalid characters in file path');
     }
   }
 }
