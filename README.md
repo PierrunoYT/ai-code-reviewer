@@ -96,6 +96,8 @@ npm run demo
 
 ### Git Hooks
 
+> **⚠️ Warning**: The git hooks functionality has not been fully tested yet. Use with caution in production environments and consider testing the hooks in a development environment first.
+
 Once installed, the hooks will automatically:
 
 - **Pre-commit**: Review staged changes before each commit
