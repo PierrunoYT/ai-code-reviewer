@@ -326,14 +326,21 @@ Be constructive, specific, and provide actionable feedback. Focus on the most im
 
   // Batch processing for multiple commits
   async reviewMultipleCommits(commits, diffs) {
-    if (this.provider === 'anthropic' && commits.length > 1) {
-      return this.batchReviewAnthropic(commits, diffs);
+    // Check if batch processing is enabled and we have multiple commits
+    if (this.config.enableBatchProcessing && this.provider === 'anthropic' && commits.length > 1) {
+      try {
+        console.log(`Starting batch review for ${commits.length} commits...`);
+        return await this.batchReviewAnthropic(commits, diffs);
+      } catch (error) {
+        console.warn('Batch processing failed, falling back to sequential:', error.message);
+      }
     }
 
-    // Google AI and OpenAI use sequential processing for now
     // Fallback to sequential processing
+    console.log(`Processing ${commits.length} commits sequentially...`);
     const reviews = [];
     for (let i = 0; i < commits.length; i++) {
+      console.log(`Reviewing commit ${i + 1}/${commits.length}: ${commits[i].hash}`);
       const review = await this.reviewCode(diffs[i], commits[i]);
       reviews.push(review);
     }
@@ -341,12 +348,19 @@ Be constructive, specific, and provide actionable feedback. Focus on the most im
   }
 
   async batchReviewAnthropic(commits, diffs) {
+    // Validate inputs
+    if (!commits || !diffs || commits.length !== diffs.length) {
+      throw new Error('Invalid commits or diffs provided for batch processing');
+    }
+
+    if (commits.length > 10000) {
+      throw new Error('Batch size exceeds Anthropic API limit of 10,000 requests');
+    }
+
     // Use Anthropic's batch processing API for efficiency
     const batchRequests = commits.map((commit, index) => ({
-      custom_id: `review_${commit.hash}`,
-      method: 'POST',
-      url: '/v1/messages',
-      body: {
+      custom_id: `review_${index}`,
+      params: {
         model: this.model,
         max_tokens: this.config.maxTokens || 64000,
         messages: [
@@ -354,13 +368,30 @@ Be constructive, specific, and provide actionable feedback. Focus on the most im
             role: 'user',
             content: this.buildPrompt(diffs[index], commit)
           }
-        ]
+        ],
+        // Add extended thinking if enabled
+        ...(this.enableExtendedThinking && {
+          thinking: {
+            type: "enabled",
+            budget_tokens: Math.min(48000, Math.floor((this.config.maxTokens || 64000) * 0.75))
+          }
+        }),
+        // Add web search tool if enabled
+        ...(this.enableWebSearch && {
+          tools: [
+            {
+              type: "web_search_20250305",
+              name: "web_search",
+              max_uses: 5
+            }
+          ]
+        })
       }
     }));
 
     try {
       const response = await axios.post(
-        'https://api.anthropic.com/v1/batches',
+        'https://api.anthropic.com/v1/messages/batches',
         {
           requests: batchRequests
         },
@@ -377,18 +408,24 @@ Be constructive, specific, and provide actionable feedback. Focus on the most im
       return this.pollBatchResults(response.data.id);
     } catch (error) {
       console.warn('Batch processing failed, falling back to sequential:', error.message);
-      return this.reviewMultipleCommits(commits, diffs);
+      // Fallback to sequential processing
+      const reviews = [];
+      for (let i = 0; i < commits.length; i++) {
+        const review = await this.reviewCode(diffs[i], commits[i]);
+        reviews.push(review);
+      }
+      return reviews;
     }
   }
 
   async pollBatchResults(batchId) {
-    const maxAttempts = 30;
-    const pollInterval = 2000; // 2 seconds
+    const maxAttempts = 60; // Increased for longer processing times
+    const pollInterval = 5000; // 5 seconds
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
         const response = await axios.get(
-          `https://api.anthropic.com/v1/batches/${batchId}`,
+          `https://api.anthropic.com/v1/messages/batches/${batchId}`,
           {
             headers: {
               'x-api-key': this.apiKey,
@@ -397,24 +434,92 @@ Be constructive, specific, and provide actionable feedback. Focus on the most im
           }
         );
 
-        if (response.data.status === 'completed') {
-          return response.data.results.map(result =>
-            this.parseResponse(result.response.body.content[0].text)
-          );
+        const batch = response.data;
+        console.log(`Batch status: ${batch.processing_status}, requests: ${JSON.stringify(batch.request_counts)}`);
+
+        if (batch.processing_status === 'ended') {
+          // Fetch the results from the results URL
+          return await this.fetchBatchResults(batch.results_url);
         }
 
-        if (response.data.status === 'failed') {
-          throw new Error('Batch processing failed');
+        if (batch.processing_status === 'canceling' || batch.processing_status === 'canceled') {
+          throw new Error('Batch processing was canceled');
         }
 
         // Wait before next poll
         await new Promise(resolve => setTimeout(resolve, pollInterval));
       } catch (error) {
         console.warn(`Batch polling attempt ${attempt + 1} failed:`, error.message);
+        
+        if (attempt === maxAttempts - 1) {
+          throw error;
+        }
       }
     }
 
-    throw new Error('Batch processing timed out');
+    throw new Error('Batch processing timed out after 5 minutes');
+  }
+
+  async fetchBatchResults(resultsUrl) {
+    try {
+      const response = await axios.get(resultsUrl, {
+        headers: {
+          'x-api-key': this.apiKey,
+          'anthropic-version': '2023-06-01'
+        }
+      });
+
+      // Parse JSONL format (each line is a separate JSON object)
+      const lines = response.data.trim().split('\n');
+      const results = [];
+      
+      for (const line of lines) {
+        if (line.trim()) {
+          try {
+            const result = JSON.parse(line);
+            if (result.result && result.result.type === 'succeeded') {
+              // Extract text content from the message
+              const content = result.result.message.content;
+              let textContent = '';
+              
+              if (Array.isArray(content)) {
+                // Filter out thinking blocks and extract text
+                const textBlocks = content.filter(block => block.type === 'text');
+                textContent = textBlocks.map(block => block.text).join(' ');
+              } else if (content.text) {
+                textContent = content.text;
+              }
+              
+              const parsedReview = this.parseResponse(textContent);
+              results.push({
+                custom_id: result.custom_id,
+                review: parsedReview
+              });
+            } else {
+              console.warn(`Request ${result.custom_id} failed:`, result.result);
+              results.push({
+                custom_id: result.custom_id,
+                review: this.getFallbackReview()
+              });
+            }
+          } catch (parseError) {
+            console.warn('Failed to parse result line:', line, parseError.message);
+          }
+        }
+      }
+      
+      // Sort results by custom_id to maintain order
+      results.sort((a, b) => {
+        const aIndex = parseInt(a.custom_id.replace('review_', '')) || 0;
+        const bIndex = parseInt(b.custom_id.replace('review_', '')) || 0;
+        return aIndex - bIndex;
+      });
+      
+      return results.map(r => r.review);
+    } catch (error) {
+      console.error('Failed to fetch batch results:', error.message);
+      throw error;
+    }
   }
 
   // Enhanced error handling with retry logic
