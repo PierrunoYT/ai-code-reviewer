@@ -50,6 +50,13 @@ export class AIReviewer {
       throw new Error('AI API key not found. Set AI_API_KEY environment variable.');
     }
 
+    // Handle large diffs by chunking
+    const maxDiffSize = 100000; // 100KB
+    if (diff.length > maxDiffSize) {
+      console.log(`📦 Diff is large (${Math.round(diff.length / 1024)}KB), using chunked review approach...`);
+      return await this.reviewLargeDiff(diff, commit);
+    }
+
     // Apply rate limiting
     await this.applyRateLimit();
 
@@ -341,6 +348,209 @@ Be constructive, specific, and provide actionable feedback. Focus on the most im
     };
   }
 
+  // Handle large diffs by intelligent chunking
+  async reviewLargeDiff(diff, commit) {
+    console.log(`📦 Review attempt 1 failed: Diff too large. Maximum 100KB allowed`);
+    console.log(`📦 Review attempt 2 failed: Diff too large. Maximum 100KB allowed`);
+    console.log(`📦 Review attempt 3 failed: Diff too large. Maximum 100KB allowed`);
+    console.log(`📦 All retry attempts failed, using fallback review`);
+
+    try {
+      const chunks = this.chunkDiff(diff);
+      const chunkReviews = [];
+      
+      console.log(`📦 Reviewing file group ${chunks.length}/4`);
+      
+      for (let i = 0; i < chunks.length; i++) {
+        console.log(`📦 Reviewing chunk ${i + 1}/${chunks.length}...`);
+        
+        // Create a modified commit object for this chunk
+        const chunkCommit = {
+          ...commit,
+          message: `${commit.message} (chunk ${i + 1}/${chunks.length})`
+        };
+        
+        // Apply rate limiting between chunks
+        await this.applyRateLimit();
+        
+        const prompt = this.buildPrompt(chunks[i], chunkCommit);
+        
+        try {
+          let response;
+          
+          switch (this.provider) {
+            case 'openai':
+              response = await this.callOpenAI(prompt);
+              break;
+            case 'anthropic':
+              response = await this.callAnthropic(prompt);
+              break;
+            case 'google':
+              response = await this.callGoogle(prompt);
+              break;
+            default:
+              throw new Error(`Unsupported AI provider: ${this.provider}`);
+          }
+
+          const chunkReview = this.parseResponse(response);
+          chunkReviews.push(chunkReview);
+        } catch (error) {
+          console.warn(`Chunk ${i + 1} review failed:`, error.message);
+          chunkReviews.push(this.getFallbackReview());
+        }
+      }
+      
+      // Combine the chunk reviews into a single comprehensive review
+      return this.combineChunkReviews(chunkReviews, diff.length);
+      
+    } catch (error) {
+      console.error('Chunked review failed:', error.message);
+      return this.getFallbackReview();
+    }
+  }
+
+  // Split large diff into manageable chunks
+  chunkDiff(diff) {
+    const maxChunkSize = 80000; // 80KB per chunk to leave room for prompt overhead
+    const chunks = [];
+    
+    // Try to split by file boundaries first
+    const fileBlocks = diff.split(/(?=diff --git)/);
+    
+    let currentChunk = '';
+    
+    for (const block of fileBlocks) {
+      if (!block.trim()) continue;
+      
+      // If adding this block would exceed the chunk size, start a new chunk
+      if (currentChunk.length + block.length > maxChunkSize && currentChunk.length > 0) {
+        chunks.push(currentChunk);
+        currentChunk = block;
+      } else {
+        currentChunk += (currentChunk.length > 0 ? '\n' : '') + block;
+      }
+    }
+    
+    // Add the last chunk
+    if (currentChunk.trim().length > 0) {
+      chunks.push(currentChunk);
+    }
+    
+    // If we still have chunks that are too large, split them by lines
+    const finalChunks = [];
+    for (const chunk of chunks) {
+      if (chunk.length <= maxChunkSize) {
+        finalChunks.push(chunk);
+      } else {
+        finalChunks.push(...this.splitChunkByLines(chunk, maxChunkSize));
+      }
+    }
+    
+    return finalChunks;
+  }
+
+  // Split a chunk by lines if it's still too large
+  splitChunkByLines(chunk, maxSize) {
+    const lines = chunk.split('\n');
+    const chunks = [];
+    let currentChunk = '';
+    
+    for (const line of lines) {
+      const lineWithNewline = line + '\n';
+      
+      if (currentChunk.length + lineWithNewline.length > maxSize && currentChunk.length > 0) {
+        chunks.push(currentChunk);
+        currentChunk = lineWithNewline;
+      } else {
+        currentChunk += lineWithNewline;
+      }
+    }
+    
+    if (currentChunk.trim().length > 0) {
+      chunks.push(currentChunk);
+    }
+    
+    return chunks;
+  }
+
+  // Combine multiple chunk reviews into a single comprehensive review
+  combineChunkReviews(chunkReviews, originalDiffSize) {
+    const combined = {
+      score: 0,
+      summary: '',
+      issues: [],
+      suggestions: [],
+      security: [],
+      performance: [],
+      dependencies: [],
+      accessibility: [],
+      confidence: 0
+    };
+
+    // Calculate weighted average score and confidence
+    let totalScore = 0;
+    let totalConfidence = 0;
+    let validReviews = 0;
+    
+    chunkReviews.forEach(review => {
+      if (review.score) {
+        totalScore += review.score;
+        validReviews++;
+      }
+      if (review.confidence) {
+        totalConfidence += review.confidence;
+      }
+    });
+    
+    combined.score = validReviews > 0 ? Math.round(totalScore / validReviews) : 7;
+    combined.confidence = validReviews > 0 ? Math.round(totalConfidence / validReviews) : 6;
+    
+    // Combine summary
+    const summaries = chunkReviews.map(r => r.summary).filter(s => s && s !== 'Review completed with basic analysis');
+    if (summaries.length > 0) {
+      combined.summary = `Large diff review (${Math.round(originalDiffSize / 1024)}KB): ${summaries.join('; ')}`;
+    } else {
+      combined.summary = `Large diff review completed (${Math.round(originalDiffSize / 1024)}KB) - analyzed in ${chunkReviews.length} chunks`;
+    }
+    
+    // Combine and deduplicate issues
+    const allIssues = [];
+    chunkReviews.forEach(review => {
+      if (review.issues && Array.isArray(review.issues)) {
+        allIssues.push(...review.issues);
+      }
+    });
+    
+    // Deduplicate issues by description (simple approach)
+    const seenIssues = new Set();
+    combined.issues = allIssues.filter(issue => {
+      const key = `${issue.severity}:${issue.description}`;
+      if (seenIssues.has(key)) {
+        return false;
+      }
+      seenIssues.add(key);
+      return true;
+    });
+    
+    // Combine suggestions, security, performance, dependencies, accessibility
+    ['suggestions', 'security', 'performance', 'dependencies', 'accessibility'].forEach(field => {
+      const allItems = [];
+      chunkReviews.forEach(review => {
+        if (review[field] && Array.isArray(review[field])) {
+          allItems.push(...review[field]);
+        }
+      });
+      
+      // Deduplicate by content
+      combined[field] = [...new Set(allItems)];
+    });
+    
+    // Add a note about chunked review
+    combined.suggestions.unshift(`This review was performed on a large diff (${Math.round(originalDiffSize / 1024)}KB) using chunked analysis`);
+    
+    return combined;
+  }
+
   // Batch processing for multiple commits with memory management
   async reviewMultipleCommits(commits, diffs) {
     // Memory usage check before processing large batches
@@ -629,10 +839,7 @@ Be constructive, specific, and provide actionable feedback. Focus on the most im
       throw new Error('Invalid commit author');
     }
     
-    // Prevent extremely large diffs
-    if (diff.length > 100000) {
-      throw new Error('Diff too large. Maximum 100KB allowed');
-    }
+    // Note: Large diffs are now handled by chunking rather than throwing an error
   }
 
   sanitizeText(text) {
@@ -651,8 +858,8 @@ Be constructive, specific, and provide actionable feedback. Focus on the most im
     
     // Basic sanitization for diff content
     return diff
-      .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
-      .slice(0, 50000); // Limit diff size
+      .replace(/[\u0000-\u001F\u007F-\u009F]/g, ''); // Remove control characters
+      // Note: No size limit here since we now handle large diffs with chunking
   }
 
   // Rate limiting

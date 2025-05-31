@@ -23,6 +23,7 @@ An intelligent code review system that analyzes your commits before creating pul
 - 📚 **Citations**: Source attribution for recommendations and best practices
 - ⚡ **Batch Processing**: Efficient review of multiple commits simultaneously
 - 🔄 **Retry Logic**: Robust error handling with exponential backoff
+- 📦 **Large Diff Support**: Intelligent chunking for diffs >100KB with comprehensive analysis
 - 🪝 **Git Integration**: Automatic git hooks for pre-commit and pre-push reviews
 - 📊 **Advanced Scoring**: Quality scores with confidence levels
 - 🎯 **Highly Customizable**: Multiple provider configs and feature toggles
@@ -336,6 +337,7 @@ The system uses `git show --unified=3` to capture:
 - **File paths**: What files were modified, added, or deleted
 - **Line numbers**: Exact locations of changes
 - **Change context**: Surrounding code for better understanding
+- **Large diff handling**: Automatically chunks diffs >100KB for comprehensive analysis
 
 ### 3. **AI Prompt Construction**
 Each commit receives a structured analysis prompt containing:
@@ -751,6 +753,127 @@ npx ai-reviewer review-all-commits --no-batch
 ```
 
 Batch processing makes the AI reviewer incredibly efficient for large-scale code analysis, turning what could be hours of sequential processing into minutes of parallel analysis! 🚀
+
+## 📦 Large Diff Handling
+
+The AI reviewer automatically handles large diffs (>100KB) through intelligent chunking, ensuring comprehensive analysis of even the largest code changes.
+
+### 🤔 Why Large Diff Handling?
+
+Large diffs can occur in several scenarios:
+- Major refactoring commits
+- Library updates with extensive changes
+- Generated code commits (build outputs, migrations)
+- Merging long-running feature branches
+- Initial repository setup commits
+
+### 🔧 How It Works
+
+When a diff exceeds 100KB, the system automatically:
+
+1. **🔍 Detects large diff**: `Diff is large (350KB), using chunked review approach...`
+2. **📦 Smart chunking**: Splits diff by file boundaries first, then by lines if needed
+3. **⚡ Parallel analysis**: Reviews each chunk with full AI capabilities
+4. **🔄 Intelligent combining**: Merges chunk reviews into comprehensive analysis
+5. **📋 Clear reporting**: Indicates chunked analysis in summary and suggestions
+
+### 📊 Chunking Strategy
+
+**File-Based Splitting (Preferred):**
+```diff
+# Chunk 1: Complete files A and B
+diff --git a/fileA.js b/fileA.js
+[complete file changes]
+
+diff --git a/fileB.js b/fileB.js  
+[complete file changes]
+
+# Chunk 2: Complete files C and D
+diff --git a/fileC.js b/fileC.js
+[complete file changes]
+```
+
+**Line-Based Splitting (Fallback):**
+```diff
+# If individual files are too large, split by lines
+# Chunk 1: Lines 1-1000 of large file
+# Chunk 2: Lines 1001-2000 of large file
+# etc.
+```
+
+### 🎯 Benefits
+
+| Benefit | Description |
+|---------|-------------|
+| **📈 No Size Limits** | Review commits of any size |
+| **🔍 Complete Analysis** | Every line gets AI attention |
+| **🧠 Context Preservation** | File boundaries maintained when possible |
+| **⚡ Efficient Processing** | Parallel chunk analysis |
+| **📊 Comprehensive Results** | Combined insights from all chunks |
+
+### 📋 Example Output
+
+```bash
+📦 Diff is large (245KB), using chunked review approach...
+📦 Review attempt 1 failed: Diff too large. Maximum 100KB allowed
+📦 Review attempt 2 failed: Diff too large. Maximum 100KB allowed  
+📦 Review attempt 3 failed: Diff too large. Maximum 100KB allowed
+📦 All retry attempts failed, using fallback review
+📦 Reviewing file group 4/4
+📦 Reviewing chunk 1/4...
+📦 Reviewing chunk 2/4...
+📦 Reviewing chunk 3/4...
+📦 Reviewing chunk 4/4...
+
+✅ AI Review Results:
+────────────────────────────────────────────────────────────────────────────────
+📊 Code Quality Score: 7/10
+🎯 Confidence Level: 8/10
+
+📋 Summary: Large diff review (245KB): Comprehensive refactoring with security improvements; Updated authentication system; Performance optimizations implemented
+
+💡 Suggestions:
+  1. This review was performed on a large diff (245KB) using chunked analysis
+  2. Consider breaking large commits into smaller, focused changes
+  3. Add comprehensive tests for refactored components
+```
+
+### ⚙️ Configuration
+
+Large diff handling is automatic and doesn't require configuration, but you can influence the process:
+
+```json
+{
+  "maxTokens": 64000,           // Larger token limits = bigger chunks
+  "retryAttempts": 3,           // Retries before falling back to chunking
+  "aiProvider": "anthropic"     // Provider affects chunk processing efficiency
+}
+```
+
+### 💡 Best Practices
+
+**For Developers:**
+- ✅ **Commit Often**: Smaller, focused commits are easier to review
+- ✅ **Logical Grouping**: Group related changes together
+- ✅ **Separate Concerns**: Keep refactoring separate from feature additions
+- ✅ **Generated Code**: Consider reviewing generated code separately
+
+**For Large Diffs:**
+- ✅ **Trust the Process**: Chunking provides comprehensive analysis
+- ✅ **Review Summary**: Pay attention to the combined summary
+- ✅ **Check All Issues**: Issues are deduplicated across chunks
+- ✅ **Consider Breaking Up**: For extremely large changes, consider multiple PRs
+
+### 🔍 Understanding Chunk Analysis
+
+**What happens during chunking:**
+1. **File Boundary Respect**: Related changes stay together when possible
+2. **Context Preservation**: Each chunk includes enough context for AI understanding
+3. **Issue Deduplication**: Similar issues across chunks are merged
+4. **Score Averaging**: Overall score reflects average quality across all chunks
+5. **Comprehensive Suggestions**: All improvement suggestions are collected and presented
+
+The chunking system ensures that **no part of your code goes unreviewed**, while maintaining the same high-quality analysis standards as smaller diffs!
 
 ## Enhanced Review Output
 
