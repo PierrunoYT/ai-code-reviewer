@@ -10,7 +10,8 @@
     "install-hook": "node src/git-hook-installer.js",
     "test": "node src/cli.js test",
     "demo": "node src/demo.js",
-    "config": "node src/cli.js config --enhanced"
+    "config": "node src/cli.js config --enhanced",
+    "summarize": "node src/cli.js summarize"
   },
   "dependencies": {
     "axios": "^1.8.2",

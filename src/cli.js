@@ -232,6 +232,27 @@ program
   });
 
 program
+  .command('summarize')
+  .description('Generate a comprehensive summary of all existing reviews')
+  .option('-d, --reviews-dir <dir>', 'Directory containing review markdown files', './code-reviews')
+  .option('-o, --output <file>', 'Output file for the summary', './code-reviews/SUMMARY.md')
+  .option('--since <date>', 'Only include reviews since this date (YYYY-MM-DD)')
+  .option('--until <date>', 'Only include reviews until this date (YYYY-MM-DD)')
+  .option('--min-score <number>', 'Only include reviews with score >= this value')
+  .option('--max-score <number>', 'Only include reviews with score <= this value')
+  .option('--severity <level>', 'Filter by minimum issue severity (low, medium, high, critical)')
+  .action(async (options) => {
+    try {
+      const config = loadConfig({});
+      const app = new ReviewerApp(config);
+      await app.summarizeReviews(options);
+    } catch (error) {
+      console.error(chalk.red('Error:'), error.message);
+      process.exit(1);
+    }
+  });
+
+program
   .command('test')
   .description('Test the AI reviewer with sample code')
   .action(async () => {

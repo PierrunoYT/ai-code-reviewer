@@ -30,21 +30,42 @@ An intelligent code review system that analyzes your commits before creating pul
 - 📄 **Markdown Reports**: Automatic saving of detailed review reports in markdown format
 - 📁 **Repository-Wide Review**: Analyze entire codebase with smart file filtering
 - 📈 **Commit History Analysis**: Review all commits with statistical insights and trends
+- 📊 **Review Summarization**: Generate comprehensive reports with analytics and recommendations
 - 🚀 **Easy Setup**: Simple CLI installation and configuration
 
 ## Installation
 
-1. **Install dependencies:**
-   ```bash
-   npm install
-   ```
+### Option 1: Global Installation (Recommended)
 
-2. **Set up your environment variables:**
-   ```bash
-   # Copy the example environment file
-   cp .env.example .env
+Install globally to use `ai-reviewer` command anywhere:
 
-   # Edit .env and add your API keys
+```bash
+# Install globally from npm
+npm install -g ai-reviewer
+
+# Or clone and install from source
+git clone https://github.com/your-username/ai-code-reviewer.git
+cd ai-code-reviewer
+npm install -g .
+```
+
+### Option 2: Local Installation
+
+For project-specific installation:
+
+```bash
+# Clone the repository
+git clone https://github.com/your-username/ai-code-reviewer.git
+cd ai-code-reviewer
+
+# Install dependencies
+npm install
+```
+
+### Setup
+
+1. **Set up your environment variables:**
+   ```bash
    # For Anthropic/Claude (recommended):
    export ANTHROPIC_API_KEY="your-anthropic-api-key"
 
@@ -55,16 +76,42 @@ An intelligent code review system that analyzes your commits before creating pul
    export GOOGLE_API_KEY="your-google-api-key"
    ```
 
-3. **Install git hooks (optional but recommended):**
+2. **Add to your shell profile (optional but recommended):**
    ```bash
-   npm run install-hook
+   # Add to ~/.bashrc, ~/.zshrc, or ~/.profile
+   echo 'export ANTHROPIC_API_KEY="your-anthropic-api-key"' >> ~/.bashrc
+   source ~/.bashrc
+   ```
+
+3. **Install git hooks in your project (optional but recommended):**
+   ```bash
+   # Navigate to your project directory
+   cd /path/to/your/project
+   
+   # Install hooks
+   ai-reviewer install-hooks
    ```
 
 ## Usage
 
 ### Command Line Interface
 
-**Review recent commits:**
+**Quick Start (Global Installation):**
+```bash
+# Review last commit
+ai-reviewer review
+
+# Review multiple commits
+ai-reviewer review HEAD~3..HEAD
+
+# Review specific commit range
+ai-reviewer review abc1234..def5678
+
+# Generate summary of all reviews
+ai-reviewer summarize
+```
+
+**Local Installation (with npm scripts):**
 ```bash
 # Review last commit
 npm run review
@@ -72,74 +119,77 @@ npm run review
 # Review multiple commits
 npm run review HEAD~3..HEAD
 
-# Review specific commit range
-npm run review abc1234..def5678
+# Generate summary
+npm run summarize
 ```
 
-**Using the CLI directly:**
+**Advanced Usage:**
 ```bash
 # Review with enhanced features
-npx ai-reviewer review --provider anthropic --web-search --citations
+ai-reviewer review --provider anthropic --web-search --citations
 
 # Review with batch processing
-npx ai-reviewer review HEAD~5..HEAD --batch
+ai-reviewer review HEAD~5..HEAD --batch
 
 # Review with extended thinking (Anthropic only)
-npx ai-reviewer review --extended-thinking
+ai-reviewer review --extended-thinking
 
 # Save reviews to custom markdown directory
-npx ai-reviewer review --markdown-dir ./my-reviews
+ai-reviewer review --markdown-dir ./my-reviews
 
 # Disable markdown saving
-npx ai-reviewer review --no-save-markdown
+ai-reviewer review --no-save-markdown
+
+# Generate comprehensive summary of all reviews
+ai-reviewer summarize
+
+# Generate summary with filters
+ai-reviewer summarize --since 2024-01-01 --min-score 7
 
 # Test the reviewer
-npx ai-reviewer test
+ai-reviewer test
 
 # Generate enhanced config file
-npm run config
-
-# Or use CLI directly for custom output
-npx ai-reviewer config --enhanced -o .ai-reviewer-config.json
+ai-reviewer config --enhanced
 
 # Install git hooks
-npm run install-hook
+ai-reviewer install-hooks
 
-# Run demo to see new features
-npm run demo
+# Or use npx if not installed globally
+npx ai-reviewer review
 ```
 
 **Review entire repository:**
 ```bash
 # Review all code files in repository
-npx ai-reviewer review-repo
+ai-reviewer review-repo
 
 # Review with custom file patterns
-npx ai-reviewer review-repo --include "**/*.{js,py}" --exclude "test/**,*.min.js"
+ai-reviewer review-repo --include "**/*.{js,py}" --exclude "test/**,*.min.js"
 
 # Limit number of files and save to custom directory
-npx ai-reviewer review-repo --max-files 20 --markdown-dir ./repo-reviews
+ai-reviewer review-repo --max-files 20 --markdown-dir ./repo-reviews
 
 # Use advanced AI features for repository review
-npx ai-reviewer review-repo --web-search --extended-thinking --citations
+ai-reviewer review-repo --web-search --extended-thinking --citations
 ```
 
 **Review all commits:**
 ```bash
 # Review all commits (max 100)
-npx ai-reviewer review-all-commits
+ai-reviewer review-all-commits
 
 # Review commits with date range filter
-npx ai-reviewer review-all-commits --since 2024-01-01 --until 2024-12-31
+ai-reviewer review-all-commits --since 2024-01-01 --until 2024-12-31
 
 # Review commits by specific author
-npx ai-reviewer review-all-commits --author "John Doe" --max-commits 50
+ai-reviewer review-all-commits --author "John Doe" --max-commits 50
 
 # Review commits from specific branch with batch processing
-npx ai-reviewer review-all-commits --branch feature/new-feature --batch
+ai-reviewer review-all-commits --branch feature/new-feature --batch
 
 # Use advanced AI features for commit history review
-npx ai-reviewer review-all-commits --web-search --extended-thinking --citations
+ai-reviewer review-all-commits --web-search --extended-thinking --citations
 ```
 
 ### Git Hooks
@@ -875,6 +925,188 @@ Large diff handling is automatic and doesn't require configuration, but you can 
 
 The chunking system ensures that **no part of your code goes unreviewed**, while maintaining the same high-quality analysis standards as smaller diffs!
 
+## 📊 Review Summarization
+
+The AI reviewer includes a powerful `summarize` command that analyzes all your existing review files and generates comprehensive reports with statistics, trends, and actionable insights.
+
+### 🤔 Why Use Review Summarization?
+
+After running multiple reviews over time, you'll want to:
+- **Track Quality Trends**: See how your code quality evolves over time
+- **Identify Patterns**: Understand common issues and improvement areas  
+- **Team Analytics**: Analyze contributor performance and patterns
+- **Generate Reports**: Create executive summaries for management
+- **Focus Efforts**: Prioritize areas that need the most attention
+
+### 🚀 Quick Start
+
+```bash
+# Generate summary of all reviews
+npm run summarize
+
+# Or use CLI directly
+npx ai-reviewer summarize
+
+# Generate summary with custom output location
+npx ai-reviewer summarize --output ./reports/monthly-summary.md
+
+# Filter reviews by date range
+npx ai-reviewer summarize --since 2024-01-01 --until 2024-03-31
+
+# Filter by quality (only high-scoring reviews)
+npx ai-reviewer summarize --min-score 8
+
+# Filter by severity (only reviews with critical issues)
+npx ai-reviewer summarize --severity critical
+```
+
+### 📋 Command Options
+
+| Option | Description | Example |
+|--------|-------------|---------|
+| `--reviews-dir <dir>` | Directory containing review files | `--reviews-dir ./my-reviews` |
+| `--output <file>` | Output file for summary | `--output ./reports/summary.md` |
+| `--since <date>` | Include reviews since date | `--since 2024-01-01` |
+| `--until <date>` | Include reviews until date | `--until 2024-12-31` |
+| `--min-score <number>` | Minimum quality score filter | `--min-score 7` |
+| `--max-score <number>` | Maximum quality score filter | `--max-score 5` |
+| `--severity <level>` | Filter by issue severity | `--severity high` |
+
+### 📊 What's Included in the Summary
+
+**📈 Quality Metrics:**
+- Average code quality scores and confidence levels
+- Score distribution across excellent/good/fair/poor ranges
+- High-quality review percentage and trends
+- Critical issue counts and patterns
+
+**⚠️ Issue Analysis:**
+- Severity breakdown (critical, high, medium, low)
+- Category analysis (security, performance, quality, etc.)
+- Most common recurring issues
+- Issue trends over time
+
+**👥 Team Analytics:**
+- Top contributors by review count
+- Average scores per contributor
+- Individual performance metrics
+- Contribution patterns and activity
+
+**📅 Timeline Analysis:**
+- Monthly review activity patterns
+- Quality trends over time
+- Issue resolution patterns
+- Development velocity insights
+
+**💡 Smart Recommendations:**
+- Personalized improvement suggestions
+- Focus area identification  
+- Training recommendations
+- Process improvement ideas
+
+### 📋 Example Summary Output
+
+```markdown
+# 📊 Code Review Summary Report
+
+**Generated:** 2024-12-15T10:30:00.000Z
+**Total Reviews Analyzed:** 45
+**Date Range:** 2024-10-01 to 2024-12-15
+
+## 🎯 Quality Overview
+
+| Metric | Value | Trend |
+|--------|-------|-------|
+| **Average Score** | 7.8/10 | 🟢 Excellent |
+| **Average Confidence** | 8.2/10 | 🎯 High |
+| **High Quality Reviews** | 32 (71.1%) | 🟢 |
+| **Total Issues Found** | 127 | 🟡 |
+| **Critical Issues** | 3 | 🚨 |
+
+## 📈 Score Distribution
+
+| Score Range | Count | Percentage | Bar |
+|-------------|-------|------------|-----|
+| 9-10 (Excellent) | 15 | 33.3% | ███████ |
+| 7-8 (Good) | 22 | 48.9% | ██████████ |
+| 5-6 (Fair) | 8 | 17.8% | ████ |
+
+## ⚠️ Issue Analysis
+
+### Most Common Issues
+1. **Missing input validation** (12 occurrences)
+2. **SQL injection vulnerabilities** (8 occurrences) 
+3. **Hardcoded secrets** (6 occurrences)
+
+## 👥 Top Contributors
+
+| Author | Reviews | Avg Score | Total Issues |
+|--------|---------|-----------|-------------|
+| Alice Johnson | 18 | 8.2 | 23 |
+| Bob Smith | 15 | 7.5 | 31 |
+| Carol Davis | 12 | 8.0 | 18 |
+
+## 💡 Recommendations
+
+1. **Address Critical Issues**: 3 critical issues found. These should be prioritized for immediate resolution.
+2. **Focus on Security**: Security issues represent 42.5% of all issues. Consider security training and OWASP guidelines implementation.
+3. **Maintain Excellence**: Code quality metrics look good! Continue following current practices.
+```
+
+### 🔄 Workflow Integration
+
+**Daily Development:**
+```bash
+# After reviewing commits during the day
+npx ai-reviewer review HEAD~5..HEAD
+
+# At end of day, generate summary
+npx ai-reviewer summarize --since today
+```
+
+**Weekly Team Reviews:**
+```bash
+# Generate weekly team summary  
+npx ai-reviewer summarize --since 2024-03-01 --until 2024-03-07 --output ./reports/week-12-summary.md
+```
+
+**Monthly Reports:**
+```bash
+# Generate comprehensive monthly report
+npx ai-reviewer summarize --since 2024-03-01 --until 2024-03-31 --output ./reports/march-2024-summary.md
+```
+
+**Quality Gate Analysis:**
+```bash
+# Check only high-severity issues for release readiness
+npx ai-reviewer summarize --severity high --since 2024-03-01
+```
+
+**Performance Reviews:**
+```bash
+# Individual contributor analysis
+npx ai-reviewer summarize --reviews-dir ./reviews/alice-reviews --output ./reports/alice-performance.md
+```
+
+### 💡 Pro Tips
+
+**📊 Regular Reporting:**
+- Set up weekly automated summaries in your CI/CD pipeline
+- Use date filters to create sprint retrospective reports
+- Compare monthly summaries to track improvement trends
+
+**🎯 Focus Areas:**
+- Use severity filters to prioritize critical issues
+- Filter by score to identify areas needing improvement
+- Track common issues to inform team training
+
+**📈 Team Management:**
+- Generate individual contributor reports for performance reviews
+- Use recommendations section for targeted improvement plans
+- Track team-wide quality metrics for process optimization
+
+The summarization feature transforms your individual code reviews into powerful insights for continuous improvement! 🚀
+
 ## Enhanced Review Output
 
 The AI reviewer provides comprehensive analysis:
@@ -980,25 +1212,31 @@ Configuration Files:
 └── .gitignore              # Git ignore patterns
 ```
 
-**Scripts:**
+**Scripts (Local Installation):**
 ```bash
 npm start          # Run the reviewer
 npm run review     # Review commits
 npm run install-hook # Install git hooks
 npm test          # Run tests with sample code
 npm run demo      # Run demo showcasing enhanced features
-npm run config    # Generate enhanced configuration file (outputs to .ai-reviewer-config.json)
+npm run config    # Generate enhanced configuration file
+npm run summarize # Generate review summary report
 ```
 
 **Available CLI Commands:**
 ```bash
-npx ai-reviewer review [range]           # Review specific commits or commit ranges
-npx ai-reviewer review-repo              # Review entire repository codebase
-npx ai-reviewer review-all-commits       # Review all commits in repository history
-npx ai-reviewer install-hooks            # Install git hooks for automated reviews
-npx ai-reviewer config                   # Generate configuration file
-npx ai-reviewer test                     # Test the AI reviewer with sample code
-npx ai-reviewer --help                   # Show all available commands and options
+# Global installation commands:
+ai-reviewer review [range]           # Review specific commits or commit ranges
+ai-reviewer review-repo              # Review entire repository codebase
+ai-reviewer review-all-commits       # Review all commits in repository history
+ai-reviewer summarize                # Generate comprehensive review summary
+ai-reviewer install-hooks            # Install git hooks for automated reviews
+ai-reviewer config                   # Generate configuration file
+ai-reviewer test                     # Test the AI reviewer with sample code
+ai-reviewer --help                   # Show all available commands and options
+
+# Or use npx without global installation:
+npx ai-reviewer [command] [options]
 ```
 
 ## Environment Variables
