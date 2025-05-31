@@ -1,0 +1,161 @@
+export class PromptBuilder {
+  constructor(config) {
+    this.config = config;
+  }
+
+  buildPrompt(diff, commit) {
+    // Sanitize inputs to prevent prompt injection
+    const sanitizedMessage = this.sanitizeText(commit.message);
+    const sanitizedAuthor = this.sanitizeText(commit.author);
+    const sanitizedDiff = this.sanitizeDiff(diff);
+    
+    let basePrompt = `You are an expert code reviewer. Please review the following git commit and provide feedback.
+
+Commit Message: ${sanitizedMessage}
+Author: ${sanitizedAuthor}
+Date: ${commit.date}
+
+Code Changes:
+\`\`\`diff
+${sanitizedDiff}
+\`\`\`
+
+Please analyze this commit focusing on:
+1. Code quality and maintainability
+2. Security vulnerabilities and potential threats
+3. Performance implications and optimizations
+4. Best practices adherence
+5. Testing considerations
+6. Documentation needs
+7. Accessibility considerations
+8. Dependency security and updates
+
+Please provide your analysis in the following JSON format:
+{
+  "score": <1-10 integer>,
+  "confidence": <1-10 integer>,
+  "summary": "<brief summary of changes and overall assessment>",
+  "issues": [
+    {
+      "severity": "<critical|high|medium|low>",
+      "description": "<description of the issue>",
+      "suggestion": "<how to fix it>",
+      "category": "<security|performance|quality|style|testing|documentation|accessibility|dependencies>",
+      "citation": "<source or reference if applicable>",
+      "autoFixable": <true|false>
+    }
+  ],
+  "suggestions": ["<general improvement suggestions>"],
+  "security": ["<security-specific notes>"],
+  "performance": ["<performance-specific notes>"],
+  "dependencies": ["<dependency-related notes>"],
+  "accessibility": ["<accessibility-specific notes>"],
+  "sources": ["<sources consulted for recommendations>"]
+}
+
+Requirements:
+- Score from 1-10 (10 being excellent)
+- Confidence level from 1-10 (10 being very confident)
+- Provide specific, actionable feedback
+- Include relevant security guidelines (OWASP, NIST, etc.)
+- Consider modern best practices for the technology stack
+- Be constructive and helpful
+- Return only valid JSON`;
+
+    // Add web search context if enabled
+    if (this.config.enableWebSearch) {
+      basePrompt += `\n\nNote: Use your knowledge of current security vulnerabilities and best practices. Reference authoritative sources like OWASP, NIST, framework documentation, and security advisories when applicable.`;
+    }
+
+    // Add extended thinking instruction for Anthropic
+    if (this.config.enableExtendedThinking && this.config.aiProvider === 'anthropic') {
+      basePrompt += `\n\nPlease use extended thinking to thoroughly analyze this code change step by step before providing your final assessment.`;
+    }
+
+    // Add citations instruction if enabled
+    if (this.config.enableCitations) {
+      basePrompt += `\n\nImportant: Include citations and sources for your recommendations in the 'citation' field and 'sources' array.`;
+    }
+
+    return basePrompt;
+  }
+
+  sanitizeText(text) {
+    if (!text) return '';
+    
+    // Remove potential prompt injection patterns
+    return text
+      .replace(/```/g, '\\`\\`\\`')
+      .replace(/\n\n\s*system:/gi, '\n\n user:')
+      .replace(/\n\n\s*assistant:/gi, '\n\n user:')
+      .replace(/\n\n\s*human:/gi, '\n\n user:')
+      .replace(/<\|.*?\|>/g, '')
+      .substring(0, 500); // Limit length
+  }
+
+  sanitizeDiff(diff) {
+    if (!diff) return '';
+    
+    // Remove potential prompt injection while preserving diff structure
+    let sanitized = diff
+      .replace(/```/g, '\\`\\`\\`')
+      .replace(/\n\n\s*system:/gi, '\n\n# system:')
+      .replace(/\n\n\s*assistant:/gi, '\n\n# assistant:')
+      .replace(/\n\n\s*human:/gi, '\n\n# human:')
+      .replace(/<\|.*?\|>/g, '');
+    
+    // Truncate very large diffs but preserve structure
+    if (sanitized.length > 50000) {
+      const lines = sanitized.split('\n');
+      const truncatedLines = lines.slice(0, 1000);
+      truncatedLines.push('... (diff truncated due to size) ...');
+      sanitized = truncatedLines.join('\n');
+    }
+    
+    return sanitized;
+  }
+
+  buildLargeDiffPrompt(chunkIndex, totalChunks, chunk, commit) {
+    const sanitizedMessage = this.sanitizeText(commit.message);
+    const sanitizedAuthor = this.sanitizeText(commit.author);
+    const sanitizedChunk = this.sanitizeDiff(chunk);
+    
+    return `You are an expert code reviewer. Please review this chunk (${chunkIndex + 1}/${totalChunks}) of a larger git commit.
+
+Commit Message: ${sanitizedMessage}
+Author: ${sanitizedAuthor}
+Date: ${commit.date}
+Chunk: ${chunkIndex + 1} of ${totalChunks}
+
+Code Changes (Chunk ${chunkIndex + 1}):
+\`\`\`diff
+${sanitizedChunk}
+\`\`\`
+
+This is part of a larger diff. Focus on this specific chunk while being aware it's part of a larger change.
+
+Analyze focusing on:
+1. Code quality and maintainability
+2. Security vulnerabilities
+3. Performance implications
+4. Best practices adherence
+5. Testing considerations
+6. Documentation needs
+7. Accessibility considerations
+8. Dependency security
+
+Return valid JSON in the same format as specified in the main review prompt:
+{
+  "score": <1-10 integer>,
+  "confidence": <1-10 integer>,
+  "summary": "<brief summary focusing on this chunk>",
+  "issues": [...],
+  "suggestions": [...],
+  "security": [...],
+  "performance": [...],
+  "dependencies": [...],
+  "accessibility": [...],
+  "sources": [...]
+}`;
+  }
+}
