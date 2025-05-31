@@ -991,8 +991,12 @@ ERROR: Could not read file - ${error.message}
       
       console.log(chalk.blue(`📊 Analyzing ${reviewData.length} reviews after filtering...`));
       
-      // Generate comprehensive summary
-      const summary = this.generateReviewSummary(reviewData, options);
+      // Generate AI-powered insights
+      console.log(chalk.blue(`🤖 Generating AI insights from review data...`));
+      const aiInsights = await this.generateAIInsights(reviewData, options);
+      
+      // Generate comprehensive summary with AI insights
+      const summary = this.generateReviewSummary(reviewData, options, aiInsights);
       
       // Create output directory if needed
       const outputDir = path.dirname(outputFile);
@@ -1206,7 +1210,7 @@ ERROR: Could not read file - ${error.message}
     return true;
   }
 
-  generateReviewSummary(reviewData, options) {
+  generateReviewSummary(reviewData, options, aiInsights = null) {
     const timestamp = new Date().toISOString();
     
     // Calculate overall statistics
@@ -1227,6 +1231,13 @@ ERROR: Could not read file - ${error.message}
     }
     
     markdown += `\n---\n\n`;
+    
+    // AI Executive Summary
+    if (aiInsights && aiInsights.executiveSummary) {
+      markdown += `## 🤖 AI Executive Summary\n\n`;
+      markdown += `${aiInsights.executiveSummary}\n\n`;
+      markdown += `**AI Confidence Level:** ${aiInsights.confidence || 'N/A'}/10\n\n`;
+    }
     
     // Overall Quality Metrics
     markdown += `## 🎯 Quality Overview\n\n`;
@@ -1320,13 +1331,122 @@ ERROR: Could not read file - ${error.message}
       markdown += `\n`;
     }
     
-    // Recommendations
-    markdown += `## 💡 Recommendations\n\n`;
-    const recommendations = this.generateRecommendations(stats);
-    recommendations.forEach((rec, i) => {
-      markdown += `${i + 1}. **${rec.title}**: ${rec.description}\n`;
-    });
-    markdown += `\n`;
+    // AI Insights and Recommendations
+    if (aiInsights) {
+      // AI Key Insights
+      if (aiInsights.keyInsights && aiInsights.keyInsights.length > 0) {
+        markdown += `## 🧠 AI Key Insights\n\n`;
+        aiInsights.keyInsights.forEach((insight, i) => {
+          markdown += `${i + 1}. ${insight}\n`;
+        });
+        markdown += `\n`;
+      }
+      
+      // Strengths
+      if (aiInsights.strengths && aiInsights.strengths.length > 0) {
+        markdown += `## ✅ Strengths\n\n`;
+        aiInsights.strengths.forEach((strength, i) => {
+          markdown += `${i + 1}. ${strength}\n`;
+        });
+        markdown += `\n`;
+      }
+      
+      // Areas for Improvement
+      if (aiInsights.areasForImprovement && aiInsights.areasForImprovement.length > 0) {
+        markdown += `## 📈 Areas for Improvement\n\n`;
+        aiInsights.areasForImprovement.forEach((area, i) => {
+          const priorityEmoji = { high: '🔴', medium: '🟡', low: '🟢' }[area.priority] || '📌';
+          markdown += `### ${i + 1}. ${priorityEmoji} ${area.area}\n\n`;
+          markdown += `**Description:** ${area.description}\n\n`;
+          markdown += `**Recommendation:** ${area.recommendation}\n\n`;
+          markdown += `**Priority:** ${area.priority.toUpperCase()}\n\n`;
+          markdown += `---\n\n`;
+        });
+      }
+      
+      // Risk Assessment
+      if (aiInsights.riskAssessment) {
+        markdown += `## ⚠️ Risk Assessment\n\n`;
+        const riskEmoji = { low: '🟢', medium: '🟡', high: '🟠', critical: '🔴' }[aiInsights.riskAssessment.level] || '📊';
+        markdown += `**Risk Level:** ${riskEmoji} ${aiInsights.riskAssessment.level.toUpperCase()}\n\n`;
+        markdown += `**Analysis:** ${aiInsights.riskAssessment.description}\n\n`;
+        if (aiInsights.riskAssessment.concerns && aiInsights.riskAssessment.concerns.length > 0) {
+          markdown += `**Key Concerns:**\n`;
+          aiInsights.riskAssessment.concerns.forEach((concern, i) => {
+            markdown += `${i + 1}. ${concern}\n`;
+          });
+          markdown += `\n`;
+        }
+      }
+      
+      // Trend Analysis
+      if (aiInsights.trendAnalysis) {
+        markdown += `## 📈 Trend Analysis\n\n`;
+        const trendEmoji = { improving: '📈', stable: '➡️', declining: '📉' }[aiInsights.trendAnalysis.qualityTrend] || '📊';
+        markdown += `**Quality Trend:** ${trendEmoji} ${aiInsights.trendAnalysis.qualityTrend.toUpperCase()}\n\n`;
+        markdown += `**Analysis:** ${aiInsights.trendAnalysis.description}\n\n`;
+        if (aiInsights.trendAnalysis.predictions && aiInsights.trendAnalysis.predictions.length > 0) {
+          markdown += `**Predictions:**\n`;
+          aiInsights.trendAnalysis.predictions.forEach((prediction, i) => {
+            markdown += `${i + 1}. ${prediction}\n`;
+          });
+          markdown += `\n`;
+        }
+      }
+      
+      // Team Performance
+      if (aiInsights.teamPerformance) {
+        markdown += `## 👥 Team Performance Analysis\n\n`;
+        markdown += `**Overview:** ${aiInsights.teamPerformance.overview}\n\n`;
+        if (aiInsights.teamPerformance.highlights && aiInsights.teamPerformance.highlights.length > 0) {
+          markdown += `**Highlights:**\n`;
+          aiInsights.teamPerformance.highlights.forEach((highlight, i) => {
+            markdown += `${i + 1}. ✅ ${highlight}\n`;
+          });
+          markdown += `\n`;
+        }
+        if (aiInsights.teamPerformance.concerns && aiInsights.teamPerformance.concerns.length > 0) {
+          markdown += `**Areas for Attention:**\n`;
+          aiInsights.teamPerformance.concerns.forEach((concern, i) => {
+            markdown += `${i + 1}. ⚠️ ${concern}\n`;
+          });
+          markdown += `\n`;
+        }
+      }
+      
+      // AI Recommendations
+      if (aiInsights.recommendations && aiInsights.recommendations.length > 0) {
+        markdown += `## 🚀 AI-Powered Recommendations\n\n`;
+        aiInsights.recommendations.forEach((rec, i) => {
+          const impactEmoji = { high: '🔥', medium: '⚡', low: '💡' }[rec.impact] || '📌';
+          const effortEmoji = { high: '🔴', medium: '🟡', low: '🟢' }[rec.effort] || '⚪';
+          markdown += `### ${i + 1}. ${impactEmoji} ${rec.title}\n\n`;
+          markdown += `**Description:** ${rec.description}\n\n`;
+          markdown += `**Impact:** ${rec.impact.toUpperCase()} | **Effort:** ${effortEmoji} ${rec.effort.toUpperCase()}\n\n`;
+          markdown += `**Timeframe:** ${rec.timeframe}\n\n`;
+          markdown += `---\n\n`;
+        });
+      }
+      
+      // Focus Areas
+      if (aiInsights.focusAreas && aiInsights.focusAreas.length > 0) {
+        markdown += `## 🎯 Strategic Focus Areas\n\n`;
+        aiInsights.focusAreas.forEach((area, i) => {
+          markdown += `### ${i + 1}. ${area.area}\n\n`;
+          markdown += `**Rationale:** ${area.rationale}\n\n`;
+          markdown += `**Success Metrics:** ${area.metrics}\n\n`;
+          markdown += `---\n\n`;
+        });
+      }
+    } else {
+      // Fallback to statistical recommendations
+      markdown += `## 💡 Recommendations\n\n`;
+      const recommendations = this.generateRecommendations(stats);
+      recommendations.forEach((rec, i) => {
+        markdown += `${i + 1}. **${rec.title}**: ${rec.description}\n`;
+      });
+      markdown += `\n`;
+    }
     
     // Recent Reviews
     if (reviewData.length > 0) {
@@ -1348,7 +1468,12 @@ ERROR: Could not read file - ${error.message}
     
     // Footer
     markdown += `---\n\n`;
-    markdown += `*Generated by AI PR Reviewer Summary Tool*\n`;
+    if (aiInsights) {
+      markdown += `*Generated by AI PR Reviewer with ${this.config.aiProvider} (${this.config.model}) Analysis*\n`;
+      markdown += `*AI-powered insights with ${aiInsights.confidence || 'unknown'}/10 confidence level*\n`;
+    } else {
+      markdown += `*Generated by AI PR Reviewer Summary Tool (Statistical Analysis)*\n`;
+    }
     markdown += `*Report includes ${reviewData.length} reviews from ${stats.dateRange.start} to ${stats.dateRange.end}*\n`;
     
     return markdown;
@@ -1574,6 +1699,243 @@ ERROR: Could not read file - ${error.message}
     if (confidence >= 8) return '🎯 High';
     if (confidence >= 6) return '📊 Medium';
     return '❓ Low';
+  }
+
+  async generateAIInsights(reviewData, options) {
+    try {
+      const stats = this.calculateReviewStatistics(reviewData);
+      
+      // Prepare data for AI analysis
+      const analysisData = {
+        totalReviews: stats.totalReviews,
+        averageScore: stats.averageScore,
+        averageConfidence: stats.averageConfidence,
+        totalIssues: stats.totalIssues,
+        criticalIssues: stats.criticalIssues,
+        highQualityPercentage: stats.highQualityPercentage,
+        dateRange: stats.dateRange,
+        scoreDistribution: stats.scoreDistribution,
+        issueSeverity: stats.issueSeverity,
+        issueCategories: stats.issueCategories,
+        commonIssues: stats.commonIssues.slice(0, 10),
+        topCommitters: stats.topCommitters.slice(0, 5),
+        timeAnalysis: stats.timeAnalysis,
+        reviewTypes: stats.reviewTypes
+      };
+      
+      // Sample recent review summaries for context
+      const recentSummaries = reviewData
+        .filter(r => r.summary && r.summary.length > 10)
+        .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+        .slice(0, 10)
+        .map(r => ({
+          score: r.score,
+          summary: r.summary,
+          issueCount: r.issues.length,
+          severities: r.issues.map(i => i.severity),
+          categories: r.issues.map(i => i.category).filter(c => c)
+        }));
+      
+      const prompt = this.buildSummaryPrompt(analysisData, recentSummaries, options);
+      
+      // Apply rate limiting
+      await this.aiReviewer.applyRateLimit();
+      
+      let response;
+      switch (this.config.aiProvider) {
+        case 'openai':
+          response = await this.aiReviewer.callOpenAI(prompt);
+          break;
+        case 'anthropic':
+          response = await this.aiReviewer.callAnthropic(prompt);
+          break;
+        case 'google':
+          response = await this.aiReviewer.callGoogle(prompt);
+          break;
+        default:
+          throw new Error(`Unsupported AI provider: ${this.config.aiProvider}`);
+      }
+      
+      return this.aiReviewer.parseResponse(response);
+    } catch (error) {
+      console.warn(chalk.yellow('⚠️ AI analysis failed, using statistical analysis only:', error.message));
+      return this.getFallbackInsights();
+    }
+  }
+
+  buildSummaryPrompt(stats, recentSummaries, options) {
+    const filtersApplied = Object.keys(options).filter(k => ['since', 'until', 'minScore', 'maxScore', 'severity'].includes(k));
+    
+    let prompt = `You are an expert software engineering manager analyzing code review data to provide strategic insights and recommendations.
+
+## Review Data Analysis
+
+**Overview:**
+- Total Reviews: ${stats.totalReviews}
+- Date Range: ${stats.dateRange.start} to ${stats.dateRange.end}
+- Average Quality Score: ${stats.averageScore.toFixed(1)}/10
+- Average AI Confidence: ${stats.averageConfidence.toFixed(1)}/10
+- High Quality Reviews: ${stats.highQualityPercentage.toFixed(1)}%
+- Total Issues Found: ${stats.totalIssues}
+- Critical Issues: ${stats.criticalIssues}
+
+**Score Distribution:**
+${Object.entries(stats.scoreDistribution).map(([range, data]) => 
+  `- ${range}: ${data.count} reviews (${data.percentage.toFixed(1)}%)`
+).join('\n')}
+
+**Issue Breakdown by Severity:**
+${Object.entries(stats.issueSeverity).map(([severity, count]) => 
+  `- ${severity.toUpperCase()}: ${count} issues (${((count / stats.totalIssues) * 100).toFixed(1)}%)`
+).join('\n')}
+
+**Issue Categories:**
+${Object.entries(stats.issueCategories).map(([category, count]) => 
+  `- ${category}: ${count} issues (${((count / stats.totalIssues) * 100).toFixed(1)}%)`
+).join('\n')}
+
+**Most Common Issues:**
+${stats.commonIssues.map((issue, i) => 
+  `${i + 1}. "${issue.description}" (${issue.count} occurrences)`
+).join('\n')}
+
+**Top Contributors:**
+${stats.topCommitters.map((committer, i) => 
+  `${i + 1}. ${committer.author}: ${committer.count} reviews, avg score ${committer.avgScore.toFixed(1)}, ${committer.totalIssues} issues`
+).join('\n')}`;
+
+    if (Object.keys(stats.timeAnalysis).length > 1) {
+      prompt += `\n\n**Timeline Analysis:**
+${Object.entries(stats.timeAnalysis).map(([period, data]) => 
+  `- ${period}: ${data.count} reviews, avg score ${data.avgScore.toFixed(1)}, ${data.issues} issues`
+).join('\n')}`;
+    }
+
+    if (recentSummaries.length > 0) {
+      prompt += `\n\n**Recent Review Summaries for Context:**
+${recentSummaries.map((review, i) => 
+  `${i + 1}. Score ${review.score}/10: "${review.summary}" (${review.issueCount} issues: ${review.severities.join(', ')})`
+).join('\n')}`;
+    }
+
+    if (filtersApplied.length > 0) {
+      prompt += `\n\n**Note:** This analysis includes filters: ${filtersApplied.join(', ')}`;
+    }
+
+    prompt += `
+
+## Analysis Request
+
+Please provide a comprehensive analysis in JSON format with these sections:
+
+1. **Executive Summary**: 2-3 sentences summarizing overall code quality status and key trends
+2. **Key Insights**: 3-5 specific insights about patterns, trends, or notable findings
+3. **Strengths**: What the team/codebase is doing well (2-3 points)
+4. **Areas for Improvement**: Priority areas needing attention (3-5 points with specific recommendations)
+5. **Risk Assessment**: Current risk level and specific concerns
+6. **Trend Analysis**: How quality metrics are trending over time
+7. **Team Performance**: Insights about contributor patterns and performance
+8. **Recommendations**: 5-7 specific, actionable recommendations prioritized by impact
+9. **Focus Areas**: Top 3 strategic focus areas for the next period
+
+Format your response as JSON with this structure:
+{
+  "executiveSummary": "<2-3 sentence overview>",
+  "keyInsights": ["<insight 1>", "<insight 2>", "..."],
+  "strengths": ["<strength 1>", "<strength 2>", "..."],
+  "areasForImprovement": [
+    {
+      "area": "<area name>",
+      "description": "<detailed description>",
+      "recommendation": "<specific action to take>",
+      "priority": "high|medium|low"
+    }
+  ],
+  "riskAssessment": {
+    "level": "low|medium|high|critical",
+    "description": "<risk analysis>",
+    "concerns": ["<concern 1>", "<concern 2>", "..."]
+  },
+  "trendAnalysis": {
+    "qualityTrend": "improving|stable|declining",
+    "description": "<trend analysis>",
+    "predictions": ["<prediction 1>", "<prediction 2>", "..."]
+  },
+  "teamPerformance": {
+    "overview": "<team performance summary>",
+    "highlights": ["<highlight 1>", "<highlight 2>", "..."],
+    "concerns": ["<concern 1>", "<concern 2>", "..."]
+  },
+  "recommendations": [
+    {
+      "title": "<recommendation title>",
+      "description": "<detailed recommendation>",
+      "impact": "high|medium|low",
+      "effort": "high|medium|low",
+      "timeframe": "<implementation timeframe>"
+    }
+  ],
+  "focusAreas": [
+    {
+      "area": "<focus area>",
+      "rationale": "<why this should be a focus>",
+      "metrics": "<how to measure success>"
+    }
+  ],
+  "confidence": <1-10 confidence level in this analysis>
+}
+
+Provide specific, actionable insights based on the data. Focus on strategic recommendations that will have the most impact on code quality and team productivity.`;
+
+    return prompt;
+  }
+
+  getFallbackInsights() {
+    return {
+      executiveSummary: "Code review analysis completed with statistical metrics. AI insights unavailable.",
+      keyInsights: ["Statistical analysis completed successfully"],
+      strengths: ["Consistent review process in place"],
+      areasForImprovement: [
+        {
+          area: "Process Optimization",
+          description: "Continue monitoring code review metrics",
+          recommendation: "Regular analysis of review data",
+          priority: "medium"
+        }
+      ],
+      riskAssessment: {
+        level: "medium",
+        description: "Unable to perform AI risk analysis",
+        concerns: ["AI analysis unavailable"]
+      },
+      trendAnalysis: {
+        qualityTrend: "stable",
+        description: "Trend analysis requires AI processing",
+        predictions: []
+      },
+      teamPerformance: {
+        overview: "Team performance metrics available in statistical analysis",
+        highlights: [],
+        concerns: []
+      },
+      recommendations: [
+        {
+          title: "Enable AI Analysis",
+          description: "Ensure AI provider is properly configured for enhanced insights",
+          impact: "high",
+          effort: "low",
+          timeframe: "immediate"
+        }
+      ],
+      focusAreas: [
+        {
+          area: "Review Process",
+          rationale: "Maintain consistent code review practices",
+          metrics: "Review completion rate and quality scores"
+        }
+      ],
+      confidence: 3
+    };
   }
 
   displaySummaryMetrics(reviewData) {
