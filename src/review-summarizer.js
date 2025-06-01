@@ -391,6 +391,12 @@ export class ReviewSummarizer {
         }
       }
       
+      // Add comprehensive issue catalog
+      markdown += this.generateCompleteIssueCatalog(reviewData);
+      
+      // Add review-by-review breakdown  
+      markdown += this.generateReviewBreakdown(reviewData);
+      
     } else {
       markdown += `## 💡 Basic Recommendations\n\n`;
       const recommendations = this.generateRecommendations(stats);
@@ -905,6 +911,195 @@ export class ReviewSummarizer {
       shortTerm: 'Implement comprehensive testing and validation',
       longTerm: 'Establish code quality standards and automated checks'
     };
+  }
+
+  generateCompleteIssueCatalog(reviewData) {
+    let markdown = `\n---\n\n## 📋 Complete Issue Catalog\n\n`;
+    markdown += `*Comprehensive listing of all ${reviewData.reduce((sum, review) => sum + review.issues.length, 0)} issues found across all reviews*\n\n`;
+    
+    // Group all issues by category
+    const issuesByCategory = {};
+    const issuesBySeverity = { critical: [], high: [], medium: [], low: [] };
+    let totalIssues = 0;
+    
+    reviewData.forEach((review, reviewIndex) => {
+      review.issues.forEach((issue, issueIndex) => {
+        totalIssues++;
+        const enrichedIssue = {
+          ...issue,
+          reviewIndex: reviewIndex + 1,
+          reviewScore: review.score,
+          reviewDate: review.timestamp,
+          issueId: `R${reviewIndex + 1}-I${issueIndex + 1}`,
+          context: review.summary?.substring(0, 60) + '...'
+        };
+        
+        // Group by category
+        if (!issuesByCategory[issue.category]) {
+          issuesByCategory[issue.category] = [];
+        }
+        issuesByCategory[issue.category].push(enrichedIssue);
+        
+        // Group by severity
+        if (issuesBySeverity[issue.severity]) {
+          issuesBySeverity[issue.severity].push(enrichedIssue);
+        }
+      });
+    });
+    
+    // Issues by Severity (most critical first)
+    markdown += `### 🚨 Issues by Severity\n\n`;
+    
+    const severityOrder = ['critical', 'high', 'medium', 'low'];
+    severityOrder.forEach(severity => {
+      const issues = issuesBySeverity[severity];
+      if (issues.length > 0) {
+        const severityIcon = severity === 'critical' ? '🔴' : severity === 'high' ? '🟠' : severity === 'medium' ? '🟡' : '🟢';
+        markdown += `#### ${severityIcon} ${severity.toUpperCase()} Issues (${issues.length})\n\n`;
+        
+        issues.forEach((issue, index) => {
+          markdown += `**${index + 1}. ${issue.issueId}** - ${issue.description}\n`;
+          markdown += `   - **Category**: ${issue.category}\n`;
+          markdown += `   - **Fix**: ${issue.suggestion}\n`;
+          markdown += `   - **Source**: Review ${issue.reviewIndex} (Score: ${issue.reviewScore}/10)\n`;
+          if (issue.autoFixable) {
+            markdown += `   - **Auto-fixable**: ✅ Yes\n`;
+          }
+          markdown += `\n`;
+        });
+      }
+    });
+    
+    // Issues by Category
+    markdown += `### 📂 Issues by Category\n\n`;
+    
+    Object.entries(issuesByCategory)
+      .sort(([,a], [,b]) => b.length - a.length) // Sort by frequency
+      .forEach(([category, issues]) => {
+        const categoryIcon = this.getCategoryIcon(category);
+        markdown += `#### ${categoryIcon} ${category.toUpperCase()} (${issues.length} issues)\n\n`;
+        
+        // Show critical and high severity first within each category
+        const sortedIssues = issues.sort((a, b) => {
+          const severityWeight = { critical: 4, high: 3, medium: 2, low: 1 };
+          return (severityWeight[b.severity] || 0) - (severityWeight[a.severity] || 0);
+        });
+        
+        sortedIssues.forEach((issue, index) => {
+          const severityBadge = this.getSeverityBadge(issue.severity);
+          markdown += `${index + 1}. ${severityBadge} **${issue.issueId}** - ${issue.description}\n`;
+          markdown += `   💡 **Solution**: ${issue.suggestion}\n`;
+          markdown += `   📍 **Source**: Review ${issue.reviewIndex} | Score: ${issue.reviewScore}/10\n`;
+          markdown += `\n`;
+        });
+      });
+    
+    // Quick Stats
+    markdown += `### 📊 Issue Statistics\n\n`;
+    markdown += `| Category | Count | Percentage |\n`;
+    markdown += `|----------|-------|------------|\n`;
+    Object.entries(issuesByCategory)
+      .sort(([,a], [,b]) => b.length - a.length)
+      .forEach(([category, issues]) => {
+        const percentage = ((issues.length / totalIssues) * 100).toFixed(1);
+        markdown += `| ${category} | ${issues.length} | ${percentage}% |\n`;
+      });
+    
+    markdown += `\n| Severity | Count | Percentage |\n`;
+    markdown += `|----------|-------|------------|\n`;
+    severityOrder.forEach(severity => {
+      const count = issuesBySeverity[severity].length;
+      if (count > 0) {
+        const percentage = ((count / totalIssues) * 100).toFixed(1);
+        markdown += `| ${severity} | ${count} | ${percentage}% |\n`;
+      }
+    });
+    
+    return markdown;
+  }
+  
+  generateReviewBreakdown(reviewData) {
+    let markdown = `\n---\n\n## 📝 Review-by-Review Breakdown\n\n`;
+    markdown += `*Detailed view of each individual review for complete transparency*\n\n`;
+    
+    reviewData.forEach((review, index) => {
+      const reviewNumber = index + 1;
+      const scoreColor = review.score >= 8 ? '🟢' : review.score >= 6 ? '🟡' : '🔴';
+      const dateStr = review.timestamp ? new Date(review.timestamp).toLocaleDateString() : 'Unknown date';
+      
+      markdown += `### Review ${reviewNumber} ${scoreColor}\n\n`;
+      markdown += `**Score**: ${review.score}/10 | **Confidence**: ${review.confidence}/10 | **Date**: ${dateStr}\n\n`;
+      
+      if (review.summary) {
+        markdown += `**Summary**: ${review.summary}\n\n`;
+      }
+      
+      // Issues found in this review
+      if (review.issues.length > 0) {
+        markdown += `**Issues Found (${review.issues.length})**:\n`;
+        review.issues.forEach((issue, issueIndex) => {
+          const severityBadge = this.getSeverityBadge(issue.severity);
+          markdown += `${issueIndex + 1}. ${severityBadge} **[${issue.category}]** ${issue.description}\n`;
+          markdown += `   💡 ${issue.suggestion}\n`;
+        });
+        markdown += `\n`;
+      } else {
+        markdown += `**No issues found** ✅\n\n`;
+      }
+      
+      // Additional notes
+      if (review.suggestions.length > 0) {
+        markdown += `**General Suggestions**:\n`;
+        review.suggestions.slice(0, 3).forEach((suggestion, i) => {
+          markdown += `- ${suggestion}\n`;
+        });
+        markdown += `\n`;
+      }
+      
+      if (review.security.length > 0) {
+        markdown += `**Security Notes**:\n`;
+        review.security.slice(0, 2).forEach((note, i) => {
+          markdown += `- ${note}\n`;
+        });
+        markdown += `\n`;
+      }
+      
+      if (review.performance.length > 0) {
+        markdown += `**Performance Notes**:\n`;
+        review.performance.slice(0, 2).forEach((note, i) => {
+          markdown += `- ${note}\n`;
+        });
+        markdown += `\n`;
+      }
+      
+      markdown += `---\n\n`;
+    });
+    
+    return markdown;
+  }
+  
+  getCategoryIcon(category) {
+    const icons = {
+      security: '🔒',
+      performance: '⚡',
+      quality: '📝',
+      testing: '🧪',
+      documentation: '📚',
+      style: '🎨',
+      dependencies: '📦',
+      accessibility: '♿'
+    };
+    return icons[category] || '📋';
+  }
+  
+  getSeverityBadge(severity) {
+    const badges = {
+      critical: '🔴 CRITICAL',
+      high: '🟠 HIGH',
+      medium: '🟡 MEDIUM',
+      low: '🟢 LOW'
+    };
+    return badges[severity] || '⚪ UNKNOWN';
   }
 
   buildSummaryPrompt(stats, patterns, reviewData, options) {
