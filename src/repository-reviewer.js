@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import chalk from 'chalk';
+import readline from 'readline';
 import { MarkdownGenerator } from './markdown-generator.js';
 
 export class RepositoryReviewer {
@@ -33,6 +34,13 @@ export class RepositoryReviewer {
         console.log(chalk.gray(`  ${index + 1}. ${file}`));
       });
       console.log(''); // Add spacing
+
+      // Ask for user confirmation
+      const shouldContinue = await this.askForConfirmation(files.length);
+      if (!shouldContinue) {
+        console.log(chalk.yellow('Review cancelled by user.'));
+        return;
+      }
 
       const fileGroups = this.groupFilesForReview(files);
 
@@ -258,6 +266,21 @@ ERROR: Could not read file - ${error.message}
     }
 
     console.log(chalk.gray('─'.repeat(80)));
+  }
+
+  async askForConfirmation(fileCount) {
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout
+    });
+
+    return new Promise((resolve) => {
+      rl.question(chalk.yellow(`\n❓ Do you want to proceed with reviewing ${fileCount} file(s)? (y/N): `), (answer) => {
+        rl.close();
+        const shouldContinue = answer.toLowerCase().trim() === 'y' || answer.toLowerCase().trim() === 'yes';
+        resolve(shouldContinue);
+      });
+    });
   }
 
   async saveRepositoryReviewToMarkdown(review, files, combinedContent) {
