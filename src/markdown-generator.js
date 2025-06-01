@@ -176,9 +176,15 @@ export class MarkdownGenerator {
       markdown += `\n`;
     }
     
-    // Summary
+    // Executive Summary (AI-generated insight)
+    const executiveSummary = this.generateIndividualReviewSummary(review, files);
+    if (executiveSummary) {
+      markdown += `## 🎯 Executive Summary\n\n${executiveSummary}\n\n`;
+    }
+    
+    // Detailed Summary
     if (review.summary) {
-      markdown += `## 📋 Summary\n\n${review.summary}\n\n`;
+      markdown += `## 📋 Detailed Analysis\n\n${review.summary}\n\n`;
     }
     
     // Issues
@@ -344,5 +350,203 @@ export class MarkdownGenerator {
     }
     
     return markdown;
+  }
+
+  generateIndividualReviewSummary(review, files) {
+    try {
+      // Generate a concise executive summary for this specific review
+      const stats = this.calculateReviewStats(review);
+      const keyFindings = this.extractKeyFindings(review);
+      const actionItems = this.extractActionItems(review);
+      
+      let summary = '';
+      
+      // Quick overview
+      summary += `**Files Analyzed:** ${files.length} | `;
+      summary += `**Quality Score:** ${review.score}/10 | `;
+      summary += `**Issues Found:** ${review.issues?.length || 0}\n\n`;
+      
+      // Key findings
+      if (keyFindings.length > 0) {
+        summary += `**🔍 Key Findings:**\n`;
+        keyFindings.slice(0, 3).forEach((finding, i) => {
+          summary += `• ${finding}\n`;
+        });
+        summary += `\n`;
+      }
+      
+      // Priority actions
+      if (actionItems.length > 0) {
+        summary += `**⚡ Priority Actions:**\n`;
+        actionItems.slice(0, 3).forEach((action, i) => {
+          summary += `${i + 1}. ${action}\n`;
+        });
+        summary += `\n`;
+      }
+      
+      // Risk assessment
+      const riskLevel = this.assessReviewRisk(review);
+      summary += `**🎯 Risk Level:** ${riskLevel.level} - ${riskLevel.description}\n\n`;
+      
+      // Overall recommendation
+      const recommendation = this.generateReviewRecommendation(review, stats);
+      summary += `**💡 Recommendation:** ${recommendation}`;
+      
+      return summary;
+    } catch (error) {
+      console.warn('Failed to generate individual review summary:', error.message);
+      return null;
+    }
+  }
+  
+  calculateReviewStats(review) {
+    const stats = {
+      totalIssues: review.issues?.length || 0,
+      criticalIssues: review.issues?.filter(i => i.severity === 'critical').length || 0,
+      highIssues: review.issues?.filter(i => i.severity === 'high').length || 0,
+      mediumIssues: review.issues?.filter(i => i.severity === 'medium').length || 0,
+      lowIssues: review.issues?.filter(i => i.severity === 'low').length || 0,
+      categories: {}
+    };
+    
+    // Count issues by category
+    review.issues?.forEach(issue => {
+      stats.categories[issue.category] = (stats.categories[issue.category] || 0) + 1;
+    });
+    
+    return stats;
+  }
+  
+  extractKeyFindings(review) {
+    const findings = [];
+    
+    // Get most severe issues
+    const criticalIssues = review.issues?.filter(i => i.severity === 'critical') || [];
+    const highIssues = review.issues?.filter(i => i.severity === 'high') || [];
+    
+    if (criticalIssues.length > 0) {
+      findings.push(`${criticalIssues.length} critical security/quality issues requiring immediate attention`);
+    }
+    
+    if (highIssues.length > 0) {
+      findings.push(`${highIssues.length} high-priority issues affecting code reliability`);
+    }
+    
+    // Category-specific findings
+    const categories = {};
+    review.issues?.forEach(issue => {
+      categories[issue.category] = (categories[issue.category] || 0) + 1;
+    });
+    
+    const topCategory = Object.entries(categories).sort(([,a], [,b]) => b - a)[0];
+    if (topCategory && topCategory[1] > 2) {
+      findings.push(`${topCategory[1]} ${topCategory[0]} issues indicate systemic ${topCategory[0]} concerns`);
+    }
+    
+    // Performance/Security specific
+    const securityIssues = review.issues?.filter(i => i.category === 'security').length || 0;
+    const performanceIssues = review.issues?.filter(i => i.category === 'performance').length || 0;
+    
+    if (securityIssues > 0) {
+      findings.push(`Security vulnerabilities detected - ${securityIssues} security-related issues`);
+    }
+    
+    if (performanceIssues > 2) {
+      findings.push(`Performance optimization opportunities identified - ${performanceIssues} performance issues`);
+    }
+    
+    return findings;
+  }
+  
+  extractActionItems(review) {
+    const actions = [];
+    const stats = this.calculateReviewStats(review);
+    
+    // Critical actions first
+    if (stats.criticalIssues > 0) {
+      actions.push(`Fix ${stats.criticalIssues} critical issues immediately (security/functionality risks)`);
+    }
+    
+    // Category-specific actions
+    const securityIssues = stats.categories.security || 0;
+    const performanceIssues = stats.categories.performance || 0;
+    const qualityIssues = stats.categories.quality || 0;
+    const testingIssues = stats.categories.testing || 0;
+    
+    if (securityIssues > 0) {
+      actions.push(`Address ${securityIssues} security vulnerabilities before deployment`);
+    }
+    
+    if (testingIssues > 0) {
+      actions.push(`Implement ${testingIssues} testing improvements to prevent regressions`);
+    }
+    
+    if (performanceIssues > 1) {
+      actions.push(`Optimize ${performanceIssues} performance bottlenecks for better user experience`);
+    }
+    
+    if (qualityIssues > 3) {
+      actions.push(`Refactor ${qualityIssues} code quality issues to improve maintainability`);
+    }
+    
+    return actions;
+  }
+  
+  assessReviewRisk(review) {
+    const stats = this.calculateReviewStats(review);
+    
+    if (stats.criticalIssues > 0) {
+      return {
+        level: '🔴 HIGH RISK',
+        description: 'Critical issues present - immediate action required'
+      };
+    }
+    
+    if (stats.highIssues > 2 || (stats.categories.security || 0) > 0) {
+      return {
+        level: '🟡 MEDIUM RISK',
+        description: 'Significant issues requiring attention before production'
+      };
+    }
+    
+    if (stats.totalIssues > 5) {
+      return {
+        level: '🟠 MODERATE RISK',
+        description: 'Multiple issues affecting code quality and maintainability'
+      };
+    }
+    
+    return {
+      level: '🟢 LOW RISK',
+      description: 'Minor issues that can be addressed in normal development cycle'
+    };
+  }
+  
+  generateReviewRecommendation(review, stats) {
+    if (stats.criticalIssues > 0) {
+      return 'Do not deploy until critical issues are resolved. Schedule immediate remediation.';
+    }
+    
+    if (stats.highIssues > 2) {
+      return 'Address high-priority issues before next release. Consider additional testing.';
+    }
+    
+    if (stats.totalIssues > 8) {
+      return 'Significant refactoring recommended. Plan technical debt reduction sprint.';
+    }
+    
+    if ((stats.categories.security || 0) > 0) {
+      return 'Security review required before deployment. Address all security concerns.';
+    }
+    
+    if (review.score >= 8) {
+      return 'Good code quality. Address remaining issues during regular development cycle.';
+    }
+    
+    if (review.score >= 6) {
+      return 'Acceptable quality with room for improvement. Plan incremental enhancements.';
+    }
+    
+    return 'Significant improvements needed. Consider comprehensive refactoring approach.';
   }
 }
