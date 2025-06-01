@@ -77,9 +77,12 @@ export class AIProviders {
       messages[0].content += '\n\nPlease use extended thinking to provide deeper analysis.';
     }
 
+    const maxTokens = parseInt(this.config.maxTokens) || 16000;
+    console.log(`🔧 Using max_tokens: ${maxTokens} (config: ${this.config.maxTokens})`);
+    
     const payload = {
       model: this.model,
-      max_tokens: parseInt(this.config.maxTokens) || 16000,
+      max_tokens: maxTokens,
       messages: messages,
       system: "You are an expert code reviewer. You MUST return ONLY valid, complete JSON in your response. Do not wrap the JSON in markdown code blocks or backticks. Do not include any text outside the JSON object. Start your response directly with { and end with }. Ensure the JSON is properly formatted and not truncated.",
       temperature: 0.1
