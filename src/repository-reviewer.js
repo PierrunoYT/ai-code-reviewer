@@ -198,43 +198,111 @@ export class RepositoryReviewer {
   }
 
   matchesPatterns(filePath, patterns) {
-    // Normalize filePath to use forward slashes, as glob patterns typically use /
     const normalizedFilePath = filePath.replace(/\\/g, '/');
 
     return patterns.some(pattern => {
-      // Convert glob pattern to a regex string
-      let regexString = pattern;
-
-      // 1. Escape literal dots specific to regex.
-      regexString = regexString.replace(/\./g, '\\.');
-
-      // 2. Handle globstar (**) to match any sequence of characters including path separators.
-      // Use a placeholder to avoid conflicts with single asterisks if not replaced carefully.
-      regexString = regexString.replace(/\*\*/g, '@@GLOBSTAR_PLACEHOLDER@@');
-
-      // 3. Handle single asterisk (*) to match any sequence of characters except path separators.
-      regexString = regexString.replace(/\*/g, '[^/]*');
-
-      // 4. Restore globstar functionality.
-      regexString = regexString.replace(/@@GLOBSTAR_PLACEHOLDER@@/g, '.*');
-
-      // 5. Handle brace expansion e.g., {js,ts} -> (js|ts)
-      // This ensures commas are only treated as OR operators within the braces.
-      regexString = regexString.replace(/\{([^}]+)\}/g, (match, innerContent) => {
-        return '(' + innerContent.split(',').map(item => item.trim()).join('|') + ')';
-      });
-
-      // Anchor the pattern to match the whole path from start to end
-      regexString = '^' + regexString + '$';
-
-      try {
-        const regex = new RegExp(regexString);
-        return regex.test(normalizedFilePath);
-      } catch (error) {
-        console.warn(chalk.yellow(`⚠️ Invalid regex generated from pattern: "${pattern}" -> "${regexString}" (${error.message})`));
-        return false;
-      }
+      return this.isGlobMatch(normalizedFilePath, pattern);
     });
+  }
+
+  isGlobMatch(filePath, pattern) {
+    // Simple glob matching without complex regex
+    const patternParts = pattern.split('/');
+    const pathParts = filePath.split('/');
+    
+    return this.matchGlobParts(pathParts, 0, patternParts, 0);
+  }
+
+  matchGlobParts(pathParts, pathIndex, patternParts, patternIndex) {
+    // Base cases
+    if (patternIndex === patternParts.length) {
+      return pathIndex === pathParts.length;
+    }
+    
+    if (pathIndex === pathParts.length) {
+      // Check if remaining pattern parts are all ** (globstar)
+      for (let i = patternIndex; i < patternParts.length; i++) {
+        if (patternParts[i] !== '**') return false;
+      }
+      return true;
+    }
+
+    const patternPart = patternParts[patternIndex];
+    
+    // Handle globstar (**)
+    if (patternPart === '**') {
+      // Try matching 0 or more path segments
+      for (let i = pathIndex; i <= pathParts.length; i++) {
+        if (this.matchGlobParts(pathParts, i, patternParts, patternIndex + 1)) {
+          return true;
+        }
+      }
+      return false;
+    }
+    
+    // Handle current path segment
+    if (this.matchSegment(pathParts[pathIndex], patternPart)) {
+      return this.matchGlobParts(pathParts, pathIndex + 1, patternParts, patternIndex + 1);
+    }
+    
+    return false;
+  }
+
+  matchSegment(pathSegment, patternSegment) {
+    // Handle brace expansion {js,ts,jsx}
+    if (patternSegment.includes('{') && patternSegment.includes('}')) {
+      const braceStart = patternSegment.indexOf('{');
+      const braceEnd = patternSegment.indexOf('}');
+      const prefix = patternSegment.substring(0, braceStart);
+      const suffix = patternSegment.substring(braceEnd + 1);
+      const options = patternSegment.substring(braceStart + 1, braceEnd).split(',');
+      
+      return options.some(option => {
+        const expandedPattern = prefix + option.trim() + suffix;
+        return this.matchSegment(pathSegment, expandedPattern);
+      });
+    }
+    
+    // Handle wildcards
+    if (patternSegment === '*') {
+      return true;
+    }
+    
+    // Handle patterns with wildcards
+    if (patternSegment.includes('*')) {
+      const parts = patternSegment.split('*');
+      let pathIndex = 0;
+      
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i];
+        
+        if (part === '') {
+          // Empty part means consecutive asterisks or asterisk at start/end
+          continue;
+        }
+        
+        const foundIndex = pathSegment.indexOf(part, pathIndex);
+        if (foundIndex === -1) return false;
+        
+        // For first non-empty part, it must start at the beginning if pattern starts with non-wildcard
+        if (i === 0 && patternSegment[0] !== '*' && foundIndex !== 0) {
+          return false;
+        }
+        
+        pathIndex = foundIndex + part.length;
+      }
+      
+      // Check if pattern ends with non-wildcard - last part must be at the end
+      const lastPart = parts[parts.length - 1];
+      if (lastPart !== '' && patternSegment[patternSegment.length - 1] !== '*') {
+        return pathSegment.endsWith(lastPart);
+      }
+      
+      return true;
+    }
+    
+    // Exact match
+    return pathSegment === patternSegment;
   }
 
   groupFilesForReview(files) {
