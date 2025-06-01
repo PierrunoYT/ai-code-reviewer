@@ -165,16 +165,17 @@ export class RepositoryReviewer {
       // Ask if user wants to enable web search for enhanced context
       const useWebSearch = await this.askForWebSearchOption();
       if (useWebSearch) {
-        console.log(chalk.green('🌐 Web search enabled - AI will search for best practices and documentation'));
+        console.log(chalk.green.bold('🌐 WEB SEARCH ENABLED') + chalk.green(' - AI will search for current best practices and documentation'));
       } else {
-        console.log(chalk.gray('📖 Web search disabled - using AI knowledge only'));
+        console.log(chalk.yellow.bold('📖 KNOWLEDGE-ONLY MODE') + chalk.yellow(' - using AI training data only'));
       }
 
       const fileGroups = this.groupFilesForReview(files);
 
       for (let groupIndex = 0; groupIndex < fileGroups.length; groupIndex++) {
         const group = fileGroups[groupIndex];
-        console.log(chalk.cyan(`\n📦 Reviewing file group ${groupIndex + 1}/${fileGroups.length}`));
+        const modeIndicator = useWebSearch ? '🌐' : '📖';
+        console.log(chalk.cyan(`\n📦 Reviewing file group ${groupIndex + 1}/${fileGroups.length} ${modeIndicator}`));
 
         const combinedContent = await this.combineFileContents(group);
         const mockCommit = {
@@ -191,7 +192,7 @@ export class RepositoryReviewer {
         review.groupIndex = groupIndex + 1;
         review.totalGroups = fileGroups.length;
 
-        this.displayRepositoryReview(review, group);
+        this.displayRepositoryReview(review, group, useWebSearch);
         
         if (this.config.saveToMarkdown !== false) {
           await this.saveRepositoryReviewToMarkdown(review, group, combinedContent);
@@ -483,10 +484,15 @@ ERROR: Could not read file - ${error.message}
     return combinedContent;
   }
 
-  displayRepositoryReview(review, files) {
-    console.log(chalk.green('\n✅ Repository Review Results:'));
+  displayRepositoryReview(review, files, useWebSearch = false) {
+    const modeIcon = useWebSearch ? '🌐' : '📖';
+    const modeText = useWebSearch ? chalk.green('WEB SEARCH') : chalk.yellow('KNOWLEDGE-ONLY');
+    const modeDescription = useWebSearch ? 'Enhanced with current best practices' : 'Based on AI training data';
+    
+    console.log(chalk.green('\n✅ Repository Review Results:') + ` ${modeIcon} ${modeText}`);
     console.log(chalk.gray('─'.repeat(80)));
     console.log(chalk.blue(`📁 Files in this group: ${files.join(', ')}`));
+    console.log(chalk.gray(`🔍 Review Mode: ${modeDescription}`));
     
     if (review.groupIndex && review.totalGroups) {
       console.log(chalk.gray(`📊 Group ${review.groupIndex} of ${review.totalGroups}`));
@@ -593,7 +599,10 @@ ERROR: Could not read file - ${error.message}
     }
 
     if (review.sources && review.sources.length > 0) {
-      console.log(chalk.gray('\n📚 Sources Consulted:'));
+      const sourcesTitle = useWebSearch ? 
+        chalk.gray('\n📚 Sources Consulted (Web Search):') : 
+        chalk.gray('\n📚 Sources Referenced (AI Knowledge):');
+      console.log(sourcesTitle);
       review.sources.forEach((source, i) => {
         console.log(chalk.gray(`  ${i + 1}. ${source}`));
       });
