@@ -70,18 +70,48 @@ export class ResponseParser {
     
     let repaired = jsonStr.trim();
     
-    // Remove any incomplete string at the end (common truncation pattern)
-    // Look for: "key": "incomplete value without closing quote
-    repaired = repaired.replace(/,?\s*"[^"]*":\s*"[^"]*$/, '');
+    // More aggressive truncation repair
+    // 1. Find the last complete field by looking for patterns
+    const lines = repaired.split('\n');
+    let lastCompleteLineIndex = -1;
     
-    // Remove any incomplete object or array at the end
-    repaired = repaired.replace(/,?\s*"[^"]*":\s*[\[{][^}\]]*$/, '');
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const line = lines[i].trim();
+      
+      // Check for complete field patterns
+      if (line.match(/^"[^"]+"\s*:\s*(?:"[^"]*"|\d+|true|false|null|\[[^\]]*\])\s*,?\s*$/) ||
+          line.match(/^[\}\]]\s*,?\s*$/) ||
+          line === '{' || line === '[') {
+        lastCompleteLineIndex = i;
+        break;
+      }
+      
+      // Also accept lines that end arrays or objects
+      if (line === '}' || line === ']') {
+        lastCompleteLineIndex = i;
+        break;
+      }
+    }
     
-    // Remove any incomplete key at the end
-    repaired = repaired.replace(/,?\s*"[^"]*$/, '');
+    // If we found a good stopping point, truncate there
+    if (lastCompleteLineIndex >= 0 && lastCompleteLineIndex < lines.length - 1) {
+      repaired = lines.slice(0, lastCompleteLineIndex + 1).join('\n');
+      console.warn(`🔧 Truncated to line ${lastCompleteLineIndex + 1} of ${lines.length}`);
+    } else {
+      // Fallback: remove obvious truncation patterns
+      repaired = repaired
+        .replace(/,?\s*"[^"]*":\s*"[^"]*$/, '') // Incomplete string value
+        .replace(/,?\s*"[^"]*":\s*[\[{][^}\]]*$/, '') // Incomplete object/array
+        .replace(/,?\s*"[^"]*$/, '') // Incomplete key
+        .replace(/,?\s*"[^"]*":\s*$/, '') // Key without value
+        .replace(/,\s*$/, ''); // Trailing comma
+    }
+    
+    // Clean up the repaired JSON
+    repaired = repaired.trim();
     
     // Remove trailing comma if present
-    repaired = repaired.replace(/,\s*$/, '');
+    repaired = repaired.replace(/,(\s*)$/, '$1');
     
     // Count and balance braces and brackets
     const openBraces = (repaired.match(/\{/g) || []).length;
@@ -90,10 +120,17 @@ export class ResponseParser {
     const closeBrackets = (repaired.match(/\]/g) || []).length;
     
     // Add missing closing characters
-    repaired += ']'.repeat(Math.max(0, openBrackets - closeBrackets));
-    repaired += '}'.repeat(Math.max(0, openBraces - closeBraces));
+    const missingBrackets = Math.max(0, openBrackets - closeBrackets);
+    const missingBraces = Math.max(0, openBraces - closeBraces);
     
-    console.warn(`🔧 Repaired JSON from ${jsonStr.length} to ${repaired.length} characters`);
+    if (missingBrackets > 0) {
+      repaired += '\n' + ']'.repeat(missingBrackets);
+    }
+    if (missingBraces > 0) {
+      repaired += '\n' + '}'.repeat(missingBraces);
+    }
+    
+    console.warn(`🔧 Repaired JSON from ${jsonStr.length} to ${repaired.length} characters (added ${missingBrackets} ']' and ${missingBraces} '})'`);
     
     return repaired;
   }

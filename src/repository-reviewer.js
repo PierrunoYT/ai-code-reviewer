@@ -174,7 +174,8 @@ export class RepositoryReviewer {
           date: new Date().toISOString()
         };
 
-        const review = await this.aiReviewer.reviewCodeWithRetry(combinedContent, mockCommit, this.config.retryAttempts);
+        // Check if content is too large and needs chunking
+        const review = await this.reviewWithChunking(combinedContent, mockCommit, group);
         
         review.filesReviewed = group;
         review.groupIndex = groupIndex + 1;
@@ -533,6 +534,234 @@ ERROR: Could not read file - ${error.message}
         resolve(shouldContinue);
       });
     });
+  }
+
+  async reviewWithChunking(combinedContent, mockCommit, files) {
+    const maxContentLength = 30000; // Conservative estimate for safe content size to avoid truncation
+    
+    // If content is small enough, proceed normally
+    if (combinedContent.length <= maxContentLength) {
+      console.log(chalk.gray('📄 Content size acceptable, proceeding with single review'));
+      return await this.aiReviewer.reviewCodeWithRetry(combinedContent, mockCommit, this.config.retryAttempts);
+    }
+    
+    console.log(chalk.yellow(`📦 Content too large (${combinedContent.length} chars), splitting into chunks...`));
+    
+    // Split files into smaller chunks
+    const chunks = this.createContentChunks(files, maxContentLength);
+    const chunkReviews = [];
+    
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i];
+      console.log(chalk.cyan(`📝 Reviewing chunk ${i + 1}/${chunks.length} (${chunk.files.length} files)`));
+      
+      const chunkContent = await this.combineFileContents(chunk.files);
+      const chunkCommit = {
+        ...mockCommit,
+        message: `${mockCommit.message} - Chunk ${i + 1}/${chunks.length}`,
+        hash: `${mockCommit.hash}-chunk-${i + 1}`
+      };
+      
+      try {
+        const chunkReview = await this.aiReviewer.reviewCodeWithRetry(chunkContent, chunkCommit, this.config.retryAttempts);
+        
+        // Check if this review was truncated
+        if (this.isReviewTruncated(chunkReview)) {
+          console.log(chalk.yellow(`⚠️ Chunk ${i + 1} response was truncated, retrying with smaller size...`));
+          
+          // Try with even smaller chunks
+          const smallerChunks = this.createContentChunks(chunk.files, maxContentLength / 2);
+          for (const smallChunk of smallerChunks) {
+            const smallContent = await this.combineFileContents(smallChunk.files);
+            const smallReview = await this.aiReviewer.reviewCodeWithRetry(smallContent, chunkCommit, 1);
+            chunkReviews.push(smallReview);
+          }
+        } else {
+          chunkReviews.push(chunkReview);
+        }
+      } catch (error) {
+        console.warn(chalk.yellow(`⚠️ Failed to review chunk ${i + 1}: ${error.message}`));
+        chunkReviews.push(this.createFallbackReview(`Failed to review chunk ${i + 1}`));
+      }
+    }
+    
+    // Combine all chunk reviews into a single comprehensive review
+    return this.combineChunkReviews(chunkReviews, files);
+  }
+
+  createContentChunks(files, maxSize) {
+    const chunks = [];
+    let currentChunk = { files: [], size: 0 };
+    
+    for (const file of files) {
+      try {
+        const stats = fs.statSync(file);
+        const estimatedSize = stats.size + 500; // Add overhead for formatting
+        
+        if (currentChunk.size + estimatedSize > maxSize && currentChunk.files.length > 0) {
+          // Start a new chunk
+          chunks.push(currentChunk);
+          currentChunk = { files: [file], size: estimatedSize };
+        } else {
+          currentChunk.files.push(file);
+          currentChunk.size += estimatedSize;
+        }
+      } catch (error) {
+        // If we can't stat the file, add it to current chunk with minimal size
+        currentChunk.files.push(file);
+        currentChunk.size += 1000;
+      }
+    }
+    
+    if (currentChunk.files.length > 0) {
+      chunks.push(currentChunk);
+    }
+    
+    return chunks;
+  }
+
+  isReviewTruncated(review) {
+    // Check for signs of truncation in the review
+    if (!review || typeof review !== 'object') return true;
+    
+    // Check if summary ends abruptly
+    if (review.summary && review.summary.length > 50) {
+      const lastSentence = review.summary.trim();
+      if (!lastSentence.match(/[.!?]$/)) {
+        return true;
+      }
+    }
+    
+    // Check if any issue descriptions or suggestions are truncated
+    if (review.issues && Array.isArray(review.issues)) {
+      for (const issue of review.issues) {
+        if (issue.description && issue.description.length > 20 && !issue.description.trim().match(/[.!?]$/)) {
+          return true;
+        }
+        if (issue.suggestion && issue.suggestion.length > 20 && !issue.suggestion.trim().match(/[.!?]$/)) {
+          return true;
+        }
+      }
+    }
+    
+    // Check if suggestions array has truncated items
+    if (review.suggestions && Array.isArray(review.suggestions)) {
+      for (const suggestion of review.suggestions) {
+        if (suggestion && suggestion.length > 20 && !suggestion.trim().match(/[.!?]$/)) {
+          return true;
+        }
+      }
+    }
+    
+    return false;
+  }
+
+  combineChunkReviews(chunkReviews, allFiles) {
+    if (chunkReviews.length === 0) {
+      return this.createFallbackReview('No chunk reviews available');
+    }
+    
+    if (chunkReviews.length === 1) {
+      return chunkReviews[0];
+    }
+    
+    // Calculate weighted average scores
+    const totalFiles = allFiles.length;
+    let weightedScore = 0;
+    let weightedConfidence = 0;
+    let totalWeight = 0;
+    
+    const allIssues = [];
+    const allSuggestions = [];
+    const allSecurity = [];
+    const allPerformance = [];
+    const allDependencies = [];
+    const allAccessibility = [];
+    const allSources = [];
+    
+    for (const review of chunkReviews) {
+      if (review && typeof review === 'object') {
+        const weight = review.filesReviewed ? review.filesReviewed.length : 1;
+        
+        weightedScore += (review.score || 5) * weight;
+        weightedConfidence += (review.confidence || 5) * weight;
+        totalWeight += weight;
+        
+        if (review.issues) allIssues.push(...review.issues);
+        if (review.suggestions) allSuggestions.push(...review.suggestions);
+        if (review.security) allSecurity.push(...review.security);
+        if (review.performance) allPerformance.push(...review.performance);
+        if (review.dependencies) allDependencies.push(...review.dependencies);
+        if (review.accessibility) allAccessibility.push(...review.accessibility);
+        if (review.sources) allSources.push(...review.sources);
+      }
+    }
+    
+    const avgScore = totalWeight > 0 ? Math.round(weightedScore / totalWeight) : 5;
+    const avgConfidence = totalWeight > 0 ? Math.round(weightedConfidence / totalWeight) : 5;
+    
+    // Create a comprehensive summary
+    const summaries = chunkReviews
+      .filter(r => r && r.summary)
+      .map(r => r.summary)
+      .filter(s => s.length > 10);
+    
+    const combinedSummary = summaries.length > 0 
+      ? `Combined review of ${totalFiles} files: ${summaries.join(' ')}`
+      : `Repository review completed for ${totalFiles} files across ${chunkReviews.length} chunks.`;
+    
+    return {
+      score: avgScore,
+      confidence: avgConfidence,
+      summary: combinedSummary,
+      issues: this.deduplicateArray(allIssues).slice(0, 15), // Limit to top issues
+      suggestions: this.deduplicateArray(allSuggestions).slice(0, 10),
+      security: this.deduplicateArray(allSecurity).slice(0, 10),
+      performance: this.deduplicateArray(allPerformance).slice(0, 10),
+      dependencies: this.deduplicateArray(allDependencies).slice(0, 10),
+      accessibility: this.deduplicateArray(allAccessibility).slice(0, 10),
+      sources: this.deduplicateArray(allSources).slice(0, 15)
+    };
+  }
+
+  deduplicateArray(arr) {
+    if (!Array.isArray(arr)) return [];
+    
+    // For objects (like issues), deduplicate by description
+    if (arr.length > 0 && typeof arr[0] === 'object') {
+      const seen = new Set();
+      return arr.filter(item => {
+        const key = item.description || item.message || JSON.stringify(item);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    }
+    
+    // For strings, simple deduplication
+    return [...new Set(arr)];
+  }
+
+  createFallbackReview(reason) {
+    return {
+      score: 5,
+      confidence: 3,
+      summary: `Review incomplete: ${reason}. Manual review recommended.`,
+      issues: [{
+        severity: 'medium',
+        description: `Automated review failed: ${reason}`,
+        suggestion: 'Perform manual code review',
+        category: 'system',
+        citation: '',
+        autoFixable: false
+      }],
+      suggestions: ['Manual review recommended due to processing issues'],
+      security: [],
+      performance: [],
+      dependencies: [],
+      accessibility: [],
+      sources: []
+    };
   }
 
   async saveRepositoryReviewToMarkdown(review, files, combinedContent) {
