@@ -158,11 +158,14 @@ export class RepositoryReviewer {
   async findCodeFiles(includePatterns, excludePatterns, maxFiles) {
     const files = [];
     const processedDirs = new Set();
+    let totalFilesChecked = 0;
+    let totalDirsChecked = 0;
 
     const scanDirectory = (dir, depth = 0) => {
       if (depth > 10 || files.length >= maxFiles) return;
       if (processedDirs.has(dir)) return;
       processedDirs.add(dir);
+      totalDirsChecked++;
 
       try {
         const entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -180,6 +183,7 @@ export class RepositoryReviewer {
           if (entry.isDirectory()) {
             scanDirectory(fullPath, depth + 1);
           } else if (entry.isFile()) {
+            totalFilesChecked++;
             if (this.matchesPatterns(relativePath, includePatterns)) {
               const stats = fs.statSync(fullPath);
               if (stats.size < 1024 * 1024) { // Skip files larger than 1MB
@@ -194,6 +198,42 @@ export class RepositoryReviewer {
     };
 
     scanDirectory(process.cwd());
+    
+    if (files.length === 0) {
+      console.log(chalk.yellow(`🔍 Debug info: Checked ${totalFilesChecked} files in ${totalDirsChecked} directories`));
+      console.log(chalk.gray(`Working directory: ${process.cwd()}`));
+      
+      // Show a few sample files that were found but didn't match
+      const sampleFiles = [];
+      const quickScan = (dir, depth = 0) => {
+        if (depth > 2 || sampleFiles.length >= 5) return;
+        try {
+          const entries = fs.readdirSync(dir, { withFileTypes: true }).slice(0, 10);
+          for (const entry of entries) {
+            if (sampleFiles.length >= 5) break;
+            const fullPath = path.join(dir, entry.name);
+            const relativePath = path.relative(process.cwd(), fullPath);
+            if (entry.isFile()) {
+              sampleFiles.push(relativePath);
+            } else if (entry.isDirectory() && !this.matchesPatterns(relativePath, excludePatterns)) {
+              quickScan(fullPath, depth + 1);
+            }
+          }
+        } catch (error) {}
+      };
+      quickScan(process.cwd());
+      
+      if (sampleFiles.length > 0) {
+        console.log(chalk.gray('Sample files found:'), sampleFiles);
+        console.log(chalk.gray('Testing first sample against include patterns:'));
+        const testFile = sampleFiles[0];
+        includePatterns.slice(0, 3).forEach(pattern => {
+          const matches = this.isGlobMatch(testFile, pattern);
+          console.log(chalk.gray(`  ${testFile} vs ${pattern} = ${matches}`));
+        });
+      }
+    }
+    
     return files.slice(0, maxFiles);
   }
 
