@@ -610,7 +610,7 @@ ERROR: Could not read file - ${error.message}
   }
 
   async reviewWithChunking(combinedContent, mockCommit, files) {
-    const maxContentLength = 15000; // More conservative estimate to ensure full content is processed by AI
+    const maxContentLength = 10000; // Even more conservative to prevent truncation issues
     
     // If content is small enough, proceed normally
     if (combinedContent.length <= maxContentLength) {
@@ -642,8 +642,8 @@ ERROR: Could not read file - ${error.message}
         if (this.isReviewTruncated(chunkReview)) {
           console.log(chalk.yellow(`⚠️ Chunk ${i + 1} response was truncated, retrying with smaller size...`));
           
-          // Try with even smaller chunks
-          const smallerChunks = this.createContentChunks(chunk.files, maxContentLength / 2);
+          // Try with much smaller chunks to ensure completion
+          const smallerChunks = this.createContentChunks(chunk.files, maxContentLength / 3);
           for (const smallChunk of smallerChunks) {
             const smallContent = await this.combineFileContents(smallChunk.files);
             const smallReview = await this.aiReviewer.reviewCodeWithRetry(smallContent, chunkCommit, 1);
