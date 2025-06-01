@@ -23,7 +23,8 @@ export class ResponseParser {
       return this.validateAndSanitizeResponse(parsed);
     } catch (error) {
       console.warn('Failed to parse AI response as JSON:', error.message);
-      console.warn('Raw response:', response?.substring(0, 500));
+      console.warn('Raw response length:', response?.length);
+      console.warn('Raw response preview:', response?.substring(0, 500));
       
       // Try to extract useful information from non-JSON response
       return this.extractFallbackResponse(response);
