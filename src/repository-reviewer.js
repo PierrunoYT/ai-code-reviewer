@@ -15,8 +15,36 @@ export class RepositoryReviewer {
     try {
       console.log(chalk.blue('🔍 Scanning repository for code files...'));
 
-      const includePatterns = options.include ? options.include.split(',') : ['**/*.{js,ts,jsx,tsx,py,java,cpp,c,go,rs,php,rb,cs,kt,swift}'];
-      const excludePatterns = options.exclude ? options.exclude.split(',') : ['node_modules/**', 'dist/**', 'build/**', '*.min.js', '*.test.*', '*.spec.*'];
+      const includePatterns = options.include ? options.include.split(',') : [
+        '**/*.{js,ts,jsx,tsx,vue,svelte}', // JavaScript/TypeScript
+        '**/*.{py,pyw,pyi}', // Python
+        '**/*.{java,kt,scala}', // JVM languages
+        '**/*.{cpp,c,cc,cxx,h,hpp,hxx}', // C/C++
+        '**/*.{cs,fs,vb}', // .NET languages
+        '**/*.{go,rs,swift,rb,php}', // Go, Rust, Swift, Ruby, PHP
+        '**/*.{html,htm,css,scss,sass,less}', // Web
+        '**/*.{xml,json,yaml,yml,toml}', // Data formats
+        '**/*.{sql,sh,bash,ps1,cmd,bat}', // Scripts and SQL
+        '**/*.{dart,r,m,mm,pl,lua}', // Other languages
+        '**/*.{dockerfile,Dockerfile}', // Docker
+        '**/Makefile', '**/makefile', // Make files
+        '**/*.{md,rst,txt}' // Documentation
+      ];
+      const excludePatterns = options.exclude ? options.exclude.split(',') : [
+        'node_modules/**', 'npm-debug.log*', 'yarn-debug.log*', 'yarn-error.log*',
+        '.git/**', '.svn/**', '.hg/**',
+        'dist/**', 'build/**', 'out/**', 'target/**', 'bin/**', 'obj/**',
+        '*.min.js', '*.min.css', '*.bundle.js', '*.chunk.js',
+        '*.test.*', '*.spec.*', '**/__tests__/**', '**/test/**', '**/tests/**',
+        'coverage/**', '.coverage/**', '.nyc_output/**',
+        '.env', '.env.*', '*.log', '*.tmp', '*.temp',
+        '*.jpg', '*.jpeg', '*.png', '*.gif', '*.svg', '*.ico', '*.webp',
+        '*.pdf', '*.doc', '*.docx', '*.xls', '*.xlsx', '*.ppt', '*.pptx',
+        '*.zip', '*.tar', '*.gz', '*.rar', '*.7z',
+        '.DS_Store', 'Thumbs.db', '*.swp', '*.swo', '*~',
+        '.idea/**', '.vscode/**', '*.suo', '*.user', '*.userprefs',
+        'package-lock.json', 'yarn.lock', 'composer.lock', 'Gemfile.lock'
+      ];
       const maxFiles = parseInt(options.maxFiles || '50');
 
       const files = await this.findCodeFiles(includePatterns, excludePatterns, maxFiles);
