@@ -162,6 +162,14 @@ export class RepositoryReviewer {
         return;
       }
 
+      // Ask if user wants to enable web search for enhanced context
+      const useWebSearch = await this.askForWebSearchOption();
+      if (useWebSearch) {
+        console.log(chalk.green('🌐 Web search enabled - AI will search for best practices and documentation'));
+      } else {
+        console.log(chalk.gray('📖 Web search disabled - using AI knowledge only'));
+      }
+
       const fileGroups = this.groupFilesForReview(files);
 
       for (let groupIndex = 0; groupIndex < fileGroups.length; groupIndex++) {
@@ -177,7 +185,7 @@ export class RepositoryReviewer {
         };
 
         // Check if content is too large and needs chunking
-        const review = await this.reviewWithChunking(combinedContent, mockCommit, group);
+        const review = await this.reviewWithChunking(combinedContent, mockCommit, group, useWebSearch);
         
         review.filesReviewed = group;
         review.groupIndex = groupIndex + 1;
@@ -609,13 +617,28 @@ ERROR: Could not read file - ${error.message}
     });
   }
 
-  async reviewWithChunking(combinedContent, mockCommit, files) {
+  async askForWebSearchOption() {
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout
+    });
+
+    return new Promise((resolve) => {
+      rl.question(chalk.blue(`\n🌐 Enable web search for enhanced context and best practices? (y/N): `), (answer) => {
+        rl.close();
+        const useWebSearch = answer.toLowerCase().trim() === 'y' || answer.toLowerCase().trim() === 'yes';
+        resolve(useWebSearch);
+      });
+    });
+  }
+
+  async reviewWithChunking(combinedContent, mockCommit, files, useWebSearch = false) {
     const maxContentLength = 20000; // Balanced approach - allow larger files while maintaining quality
     
     // If content is small enough, proceed normally
     if (combinedContent.length <= maxContentLength) {
       console.log(chalk.gray(`📄 Content size acceptable (${combinedContent.length} chars), proceeding with single review`));
-      return await this.aiReviewer.reviewCodeWithRetry(combinedContent, mockCommit, this.config.retryAttempts);
+      return await this.aiReviewer.reviewCodeWithRetry(combinedContent, mockCommit, this.config.retryAttempts, useWebSearch);
     }
     
     console.log(chalk.yellow(`📦 Content too large (${combinedContent.length} chars), splitting into chunks...`));
@@ -636,7 +659,7 @@ ERROR: Could not read file - ${error.message}
       };
       
       try {
-        const chunkReview = await this.aiReviewer.reviewCodeWithRetry(chunkContent, chunkCommit, this.config.retryAttempts);
+        const chunkReview = await this.aiReviewer.reviewCodeWithRetry(chunkContent, chunkCommit, this.config.retryAttempts, useWebSearch);
         
         // Check if this review was truncated
         if (this.isReviewTruncated(chunkReview)) {
@@ -646,7 +669,7 @@ ERROR: Could not read file - ${error.message}
           const smallerChunks = this.createContentChunks(chunk.files, maxContentLength / 3);
           for (const smallChunk of smallerChunks) {
             const smallContent = await this.combineFileContents(smallChunk.files);
-            const smallReview = await this.aiReviewer.reviewCodeWithRetry(smallContent, chunkCommit, 1);
+            const smallReview = await this.aiReviewer.reviewCodeWithRetry(smallContent, chunkCommit, 1, useWebSearch);
             chunkReviews.push(smallReview);
           }
         } else {

@@ -3,10 +3,10 @@ export class PromptBuilder {
     this.config = config;
   }
 
-  buildPrompt(diff, commit) {
+  buildPrompt(diff, commit, useWebSearch = false) {
     // Check if this is a repository review (not a commit diff)
     if (commit.author === 'Repository Review <repo@ai-reviewer.com>' || commit.message.startsWith('Repository review')) {
-      return this.buildRepositoryPrompt(diff, commit);
+      return this.buildRepositoryPrompt(diff, commit, useWebSearch);
     }
     
     // Sanitize inputs to prevent prompt injection
@@ -71,7 +71,7 @@ CRITICAL REQUIREMENTS:
 - End the JSON with proper closing braces and brackets`;
 
     // Add web search context if enabled
-    if (this.config.enableWebSearch) {
+    if (useWebSearch) {
       basePrompt += `\n\nNote: Use your knowledge of current security vulnerabilities and best practices. Reference authoritative sources like OWASP, NIST, framework documentation, and security advisories when applicable.`;
     }
 
@@ -88,7 +88,7 @@ CRITICAL REQUIREMENTS:
     return basePrompt;
   }
 
-  buildRepositoryPrompt(fileContent, reviewInfo) {
+  buildRepositoryPrompt(fileContent, reviewInfo, useWebSearch = false) {
     // Extract file names from the review info
     const sanitizedMessage = this.sanitizeText(reviewInfo.message);
     const sanitizedContent = this.sanitizeText(fileContent);
@@ -141,7 +141,7 @@ Please provide your analysis in the following JSON format:
 }`;
 
     // Add enhanced features if enabled
-    if (this.config.enableWebSearch) {
+    if (useWebSearch) {
       basePrompt += '\n\nPlease use web search to verify current best practices and security guidelines for the frameworks and libraries detected in the code.';
     }
     
@@ -191,12 +191,12 @@ Please provide your analysis in the following JSON format:
     return sanitized;
   }
 
-  buildLargeDiffPrompt(chunkIndex, totalChunks, chunk, commit) {
+  buildLargeDiffPrompt(chunkIndex, totalChunks, chunk, commit, useWebSearch = false) {
     const sanitizedMessage = this.sanitizeText(commit.message);
     const sanitizedAuthor = this.sanitizeText(commit.author);
     const sanitizedChunk = this.sanitizeDiff(chunk);
     
-    return `You are an expert code reviewer. Please review this chunk (${chunkIndex + 1}/${totalChunks}) of a larger git commit.
+    let prompt = `You are an expert code reviewer. Please review this chunk (${chunkIndex + 1}/${totalChunks}) of a larger git commit.
 
 Commit Message: ${sanitizedMessage}
 Author: ${sanitizedAuthor}
@@ -233,5 +233,12 @@ Return valid JSON in the same format as specified in the main review prompt:
   "accessibility": [...],
   "sources": [...]
 }`;
+
+    // Add web search context if enabled
+    if (useWebSearch) {
+      prompt += `\n\nNote: Use your knowledge of current security vulnerabilities and best practices. Reference authoritative sources like OWASP, NIST, framework documentation, and security advisories when applicable.`;
+    }
+
+    return prompt;
   }
 }

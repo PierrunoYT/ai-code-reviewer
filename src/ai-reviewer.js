@@ -66,7 +66,7 @@ export class AIReviewer {
     }
   }
 
-  async reviewCode(diff, commit) {
+  async reviewCode(diff, commit, useWebSearch = false) {
     // Validate inputs
     this.validateInputs(diff, commit);
     
@@ -78,13 +78,13 @@ export class AIReviewer {
     const maxDiffSize = 100000; // 100KB
     if (diff.length > maxDiffSize) {
       console.log(`📦 Diff is large (${Math.round(diff.length / 1024)}KB), using chunked review approach...`);
-      return await this.reviewLargeDiff(diff, commit);
+      return await this.reviewLargeDiff(diff, commit, useWebSearch);
     }
 
     // Apply rate limiting
     await this.rateLimiter.applyRateLimit();
 
-    const prompt = this.promptBuilder.buildPrompt(diff, commit);
+    const prompt = this.promptBuilder.buildPrompt(diff, commit, useWebSearch);
     
     try {
       let response;
@@ -110,12 +110,12 @@ export class AIReviewer {
     }
   }
 
-  async reviewCodeWithRetry(diff, commit, maxRetries = 3) {
+  async reviewCodeWithRetry(diff, commit, maxRetries = 3, useWebSearch = false) {
     let lastError;
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        return await this.reviewCode(diff, commit);
+        return await this.reviewCode(diff, commit, useWebSearch);
       } catch (error) {
         lastError = error;
         
@@ -133,7 +133,7 @@ export class AIReviewer {
     return this.responseParser.getFallbackReview();
   }
 
-  async reviewLargeDiff(diff, commit) {
+  async reviewLargeDiff(diff, commit, useWebSearch = false) {
     try {
       const chunks = this.chunkDiff(diff);
       console.log(`📦 Reviewing ${chunks.length} chunks...`);
@@ -145,7 +145,7 @@ export class AIReviewer {
         
         await this.rateLimiter.applyRateLimit();
         
-        const chunkPrompt = this.promptBuilder.buildLargeDiffPrompt(i, chunks.length, chunks[i], commit);
+        const chunkPrompt = this.promptBuilder.buildLargeDiffPrompt(i, chunks.length, chunks[i], commit, useWebSearch);
         
         try {
           let response;
