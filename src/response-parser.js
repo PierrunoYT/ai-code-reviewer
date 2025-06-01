@@ -4,9 +4,10 @@ export class ResponseParser {
   }
 
   parseResponse(response) {
+    let jsonStr = response;
+    
     try {
       // Handle different response formats from different providers
-      let jsonStr = response;
       
       // Extract JSON from markdown code blocks if present
       const jsonMatch = jsonStr.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
@@ -38,6 +39,17 @@ export class ResponseParser {
       console.error('❌ Failed to parse AI response as JSON:', error.message);
       console.error('Raw response length:', response?.length);
       console.error('Raw response preview:', response?.substring(0, 500));
+      console.error('Clean JSON preview:', jsonStr?.substring(0, 500));
+      console.error('First 20 characters as codes:', [...(jsonStr?.substring(0, 20) || '')].map(c => `${c}(${c.charCodeAt(0)})`));
+      
+      // Let's also try a simpler parse to see what's really wrong
+      try {
+        const simpleTest = jsonStr.substring(0, 100);
+        console.error('Testing simple parse of first 100 chars:', simpleTest);
+        JSON.parse(simpleTest + '}');
+      } catch (simpleError) {
+        console.error('Simple parse error:', simpleError.message);
+      }
       
       // Return fallback response immediately without complex repair
       return this.extractFallbackResponse(response);
@@ -87,17 +99,41 @@ export class ResponseParser {
   }
 
   cleanJsonString(jsonStr) {
-    return jsonStr
+    let cleaned = jsonStr
       .trim()
       // Remove any leading/trailing non-JSON content
       .replace(/^[^{]*/, '')
       .replace(/[^}]*$/, '')
       // Fix common JSON issues
       .replace(/,(\s*[}\]])/g, '$1') // Remove trailing commas
-      .replace(/([{,]\s*)(\w+):/g, '$1"$2":') // Quote unquoted keys
-      .replace(/:\s*'([^']*)'/g, ': "$1"') // Convert single quotes to double quotes
-      .replace(/\\n/g, '\\\\n') // Escape newlines properly
-      .replace(/\n/g, '\\n'); // Convert actual newlines to escaped newlines
+      .replace(/([{,]\s*)(\w+):/g, '$1"$2":'); // Quote unquoted keys
+    
+    // Handle quotes and newlines more carefully
+    // First, preserve existing escaped quotes
+    const preservedEscapes = cleaned.replace(/\\"/g, '___ESCAPED_QUOTE___');
+    
+    // Convert single quotes to double quotes (but not inside strings)
+    let inString = false;
+    let result = '';
+    for (let i = 0; i < preservedEscapes.length; i++) {
+      const char = preservedEscapes[i];
+      const nextChar = preservedEscapes[i + 1];
+      
+      if (char === '"' && preservedEscapes[i - 1] !== '\\') {
+        inString = !inString;
+      }
+      
+      if (char === "'" && !inString) {
+        result += '"';
+      } else {
+        result += char;
+      }
+    }
+    
+    // Restore escaped quotes
+    cleaned = result.replace(/___ESCAPED_QUOTE___/g, '\\"');
+    
+    return cleaned;
   }
 
   validateAndSanitizeResponse(parsed) {
