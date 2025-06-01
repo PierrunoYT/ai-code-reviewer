@@ -12,10 +12,23 @@ export class ResponseParser {
       const jsonMatch = jsonStr.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
       if (jsonMatch) {
         jsonStr = jsonMatch[1];
+      } else if (jsonStr.startsWith('```json')) {
+        // Handle case where JSON starts with ```json but may be incomplete
+        const startIndex = jsonStr.indexOf('{');
+        if (startIndex > -1) {
+          jsonStr = jsonStr.substring(startIndex);
+          // Remove any trailing ``` if present
+          jsonStr = jsonStr.replace(/```\s*$/, '');
+        }
       }
       
       // Clean up common JSON formatting issues
       jsonStr = this.cleanJsonString(jsonStr);
+      
+      // Try to repair truncated JSON if it fails to parse
+      if (!this.isValidJson(jsonStr)) {
+        jsonStr = this.repairTruncatedJson(jsonStr);
+      }
       
       const parsed = JSON.parse(jsonStr);
       
@@ -29,6 +42,48 @@ export class ResponseParser {
       // Return fallback response immediately without complex repair
       return this.extractFallbackResponse(response);
     }
+  }
+
+  isValidJson(str) {
+    try {
+      JSON.parse(str);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  repairTruncatedJson(jsonStr) {
+    console.warn('🔧 Attempting to repair truncated JSON...');
+    
+    let repaired = jsonStr.trim();
+    
+    // Remove any incomplete string at the end (common truncation pattern)
+    // Look for: "key": "incomplete value without closing quote
+    repaired = repaired.replace(/,?\s*"[^"]*":\s*"[^"]*$/, '');
+    
+    // Remove any incomplete object or array at the end
+    repaired = repaired.replace(/,?\s*"[^"]*":\s*[\[{][^}\]]*$/, '');
+    
+    // Remove any incomplete key at the end
+    repaired = repaired.replace(/,?\s*"[^"]*$/, '');
+    
+    // Remove trailing comma if present
+    repaired = repaired.replace(/,\s*$/, '');
+    
+    // Count and balance braces and brackets
+    const openBraces = (repaired.match(/\{/g) || []).length;
+    const closeBraces = (repaired.match(/\}/g) || []).length;
+    const openBrackets = (repaired.match(/\[/g) || []).length;
+    const closeBrackets = (repaired.match(/\]/g) || []).length;
+    
+    // Add missing closing characters
+    repaired += ']'.repeat(Math.max(0, openBrackets - closeBrackets));
+    repaired += '}'.repeat(Math.max(0, openBraces - closeBraces));
+    
+    console.warn(`🔧 Repaired JSON from ${jsonStr.length} to ${repaired.length} characters`);
+    
+    return repaired;
   }
 
   cleanJsonString(jsonStr) {

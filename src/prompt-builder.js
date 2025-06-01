@@ -55,7 +55,9 @@ Please provide your analysis in the following JSON format:
 
 CRITICAL REQUIREMENTS:
 - MUST return ONLY valid JSON in the exact format shown above
+- DO NOT wrap the JSON in markdown code blocks or backticks
 - NO additional text, explanations, or markdown formatting outside the JSON
+- Start your response directly with { and end with }
 - Score from 1-10 (10 being excellent)
 - Confidence level from 1-10 (10 being very confident)
 - All string values must be properly escaped and quoted
