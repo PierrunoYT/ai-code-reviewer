@@ -15,8 +15,8 @@ export class RepositoryReviewer {
     // Check for command-line overrides first
     if (options.include || options.exclude) {
       return {
-        includePatterns: options.include ? options.include.split(',') : this.getDefaultIncludePatterns(),
-        excludePatterns: options.exclude ? options.exclude.split(',') : this.getDefaultExcludePatterns()
+        includePatterns: options.include ? this.smartSplitPatterns(options.include) : this.getDefaultIncludePatterns(),
+        excludePatterns: options.exclude ? this.smartSplitPatterns(options.exclude) : this.getDefaultExcludePatterns()
       };
     }
 
@@ -48,6 +48,40 @@ export class RepositoryReviewer {
       includePatterns: this.getDefaultIncludePatterns(),
       excludePatterns: this.getDefaultExcludePatterns()
     };
+  }
+
+  smartSplitPatterns(patternsString) {
+    // Split patterns while respecting braces
+    const patterns = [];
+    let current = '';
+    let braceDepth = 0;
+    
+    for (let i = 0; i < patternsString.length; i++) {
+      const char = patternsString[i];
+      
+      if (char === '{') {
+        braceDepth++;
+        current += char;
+      } else if (char === '}') {
+        braceDepth--;
+        current += char;
+      } else if (char === ',' && braceDepth === 0) {
+        // Only split on commas outside of braces
+        if (current.trim()) {
+          patterns.push(current.trim());
+        }
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    
+    // Add the last pattern
+    if (current.trim()) {
+      patterns.push(current.trim());
+    }
+    
+    return patterns;
   }
 
   getDefaultIncludePatterns() {
@@ -99,8 +133,14 @@ export class RepositoryReviewer {
       
       if (files.length === 0) {
         console.log(chalk.yellow('No code files found to review.'));
-        console.log(chalk.gray('Include patterns:'), includePatterns.slice(0, 3).join(', ') + '...');
-        console.log(chalk.gray('Exclude patterns:'), excludePatterns.slice(0, 3).join(', ') + '...');
+        console.log(chalk.gray('Include patterns:'));
+        includePatterns.slice(0, 3).forEach(pattern => {
+          console.log(chalk.gray(`  - ${pattern}`));
+        });
+        console.log(chalk.gray('Exclude patterns:'));
+        excludePatterns.slice(0, 3).forEach(pattern => {
+          console.log(chalk.gray(`  - ${pattern}`));
+        });
         return;
       }
 
@@ -229,7 +269,7 @@ export class RepositoryReviewer {
         const testFile = sampleFiles[0];
         includePatterns.slice(0, 3).forEach(pattern => {
           const matches = this.isGlobMatch(testFile, pattern);
-          console.log(chalk.gray(`  ${testFile} vs ${pattern} = ${matches}`));
+          console.log(chalk.gray(`  "${testFile}" vs "${pattern}" = ${matches}`));
         });
       }
     }
