@@ -166,7 +166,7 @@ Please provide your analysis in the following JSON format:
       .replace(/\n\n\s*assistant:/gi, '\n\n user:')
       .replace(/\n\n\s*human:/gi, '\n\n user:')
       .replace(/<\|.*?\|>/g, '')
-      .substring(0, 500); // Limit length
+      .substring(0, 50000); // Increased limit for repository reviews with complete file content
   }
 
   sanitizeDiff(diff) {

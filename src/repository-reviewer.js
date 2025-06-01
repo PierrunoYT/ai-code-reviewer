@@ -610,11 +610,11 @@ ERROR: Could not read file - ${error.message}
   }
 
   async reviewWithChunking(combinedContent, mockCommit, files) {
-    const maxContentLength = 30000; // Conservative estimate for safe content size to avoid truncation
+    const maxContentLength = 15000; // More conservative estimate to ensure full content is processed by AI
     
     // If content is small enough, proceed normally
     if (combinedContent.length <= maxContentLength) {
-      console.log(chalk.gray('📄 Content size acceptable, proceeding with single review'));
+      console.log(chalk.gray(`📄 Content size acceptable (${combinedContent.length} chars), proceeding with single review`));
       return await this.aiReviewer.reviewCodeWithRetry(combinedContent, mockCommit, this.config.retryAttempts);
     }
     
