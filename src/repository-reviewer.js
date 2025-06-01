@@ -11,46 +11,96 @@ export class RepositoryReviewer {
     this.markdownGenerator = new MarkdownGenerator(config);
   }
 
+  loadFilePatterns(options) {
+    // Check for command-line overrides first
+    if (options.include || options.exclude) {
+      return {
+        includePatterns: options.include ? options.include.split(',') : this.getDefaultIncludePatterns(),
+        excludePatterns: options.exclude ? options.exclude.split(',') : this.getDefaultExcludePatterns()
+      };
+    }
+
+    // Try to load from config file
+    const configPaths = [
+      path.join(process.cwd(), 'file-patterns.json'),
+      path.join(process.cwd(), '.file-patterns.json'),
+      path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'file-patterns.json')
+    ];
+
+    for (const configPath of configPaths) {
+      try {
+        if (fs.existsSync(configPath)) {
+          const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+          console.log(chalk.gray(`📋 Loaded file patterns from: ${path.relative(process.cwd(), configPath)}`));
+          return {
+            includePatterns: config.include || this.getDefaultIncludePatterns(),
+            excludePatterns: config.exclude || this.getDefaultExcludePatterns()
+          };
+        }
+      } catch (error) {
+        console.warn(chalk.yellow(`⚠️ Failed to load config from ${configPath}: ${error.message}`));
+      }
+    }
+
+    // Fallback to defaults
+    console.log(chalk.gray('📋 Using default file patterns'));
+    return {
+      includePatterns: this.getDefaultIncludePatterns(),
+      excludePatterns: this.getDefaultExcludePatterns()
+    };
+  }
+
+  getDefaultIncludePatterns() {
+    return [
+      '**/*.{js,ts,jsx,tsx,vue,svelte}',
+      '**/*.{py,pyw,pyi}',
+      '**/*.{java,kt,scala}',
+      '**/*.{cpp,c,cc,cxx,h,hpp,hxx}',
+      '**/*.{cs,fs,vb}',
+      '**/*.{go,rs,swift,rb,php}',
+      '**/*.{html,htm,css,scss,sass,less}',
+      '**/*.{xml,json,yaml,yml,toml}',
+      '**/*.{sql,sh,bash,ps1,cmd,bat}',
+      '**/*.{dart,r,m,mm,pl,lua}',
+      '**/*.{dockerfile,Dockerfile}',
+      '**/Makefile',
+      '**/makefile',
+      '**/*.{md,rst,txt}'
+    ];
+  }
+
+  getDefaultExcludePatterns() {
+    return [
+      'node_modules/**',
+      '.git/**',
+      'dist/**',
+      'build/**',
+      '*.test.*',
+      '*.spec.*',
+      'coverage/**',
+      '*.log',
+      '*.min.js',
+      '*.min.css',
+      '.env',
+      '.env.*',
+      'package-lock.json',
+      'yarn.lock'
+    ];
+  }
+
   async reviewRepository(options = {}) {
     try {
       console.log(chalk.blue('🔍 Scanning repository for code files...'));
 
-      const includePatterns = options.include ? options.include.split(',') : [
-        '**/*.{js,ts,jsx,tsx,vue,svelte}', // JavaScript/TypeScript
-        '**/*.{py,pyw,pyi}', // Python
-        '**/*.{java,kt,scala}', // JVM languages
-        '**/*.{cpp,c,cc,cxx,h,hpp,hxx}', // C/C++
-        '**/*.{cs,fs,vb}', // .NET languages
-        '**/*.{go,rs,swift,rb,php}', // Go, Rust, Swift, Ruby, PHP
-        '**/*.{html,htm,css,scss,sass,less}', // Web
-        '**/*.{xml,json,yaml,yml,toml}', // Data formats
-        '**/*.{sql,sh,bash,ps1,cmd,bat}', // Scripts and SQL
-        '**/*.{dart,r,m,mm,pl,lua}', // Other languages
-        '**/*.{dockerfile,Dockerfile}', // Docker
-        '**/Makefile', '**/makefile', // Make files
-        '**/*.{md,rst,txt}' // Documentation
-      ];
-      const excludePatterns = options.exclude ? options.exclude.split(',') : [
-        'node_modules/**', 'npm-debug.log*', 'yarn-debug.log*', 'yarn-error.log*',
-        '.git/**', '.svn/**', '.hg/**',
-        'dist/**', 'build/**', 'out/**', 'target/**', 'bin/**', 'obj/**',
-        '*.min.js', '*.min.css', '*.bundle.js', '*.chunk.js',
-        '*.test.*', '*.spec.*', '**/__tests__/**', '**/test/**', '**/tests/**',
-        'coverage/**', '.coverage/**', '.nyc_output/**',
-        '.env', '.env.*', '*.log', '*.tmp', '*.temp',
-        '*.jpg', '*.jpeg', '*.png', '*.gif', '*.svg', '*.ico', '*.webp',
-        '*.pdf', '*.doc', '*.docx', '*.xls', '*.xlsx', '*.ppt', '*.pptx',
-        '*.zip', '*.tar', '*.gz', '*.rar', '*.7z',
-        '.DS_Store', 'Thumbs.db', '*.swp', '*.swo', '*~',
-        '.idea/**', '.vscode/**', '*.suo', '*.user', '*.userprefs',
-        'package-lock.json', 'yarn.lock', 'composer.lock', 'Gemfile.lock'
-      ];
+      const { includePatterns, excludePatterns } = this.loadFilePatterns(options);
       const maxFiles = parseInt(options.maxFiles || '50');
 
       const files = await this.findCodeFiles(includePatterns, excludePatterns, maxFiles);
       
       if (files.length === 0) {
         console.log(chalk.yellow('No code files found to review.'));
+        console.log(chalk.gray('Include patterns:'), includePatterns.slice(0, 3).join(', ') + '...');
+        console.log(chalk.gray('Exclude patterns:'), excludePatterns.slice(0, 3).join(', ') + '...');
         return;
       }
 
@@ -148,16 +198,42 @@ export class RepositoryReviewer {
   }
 
   matchesPatterns(filePath, patterns) {
+    // Normalize filePath to use forward slashes, as glob patterns typically use /
+    const normalizedFilePath = filePath.replace(/\\/g, '/');
+
     return patterns.some(pattern => {
-      const regexPattern = pattern
-        .replace(/\*\*/g, '.*')
-        .replace(/\*/g, '[^/]*')
-        .replace(/\./g, '\\.')
-        .replace(/\{([^}]+)\}/g, '($1)')
-        .replace(/,/g, '|');
-      
-      const regex = new RegExp(regexPattern);
-      return regex.test(filePath);
+      // Convert glob pattern to a regex string
+      let regexString = pattern;
+
+      // 1. Escape literal dots specific to regex.
+      regexString = regexString.replace(/\./g, '\\.');
+
+      // 2. Handle globstar (**) to match any sequence of characters including path separators.
+      // Use a placeholder to avoid conflicts with single asterisks if not replaced carefully.
+      regexString = regexString.replace(/\*\*/g, '@@GLOBSTAR_PLACEHOLDER@@');
+
+      // 3. Handle single asterisk (*) to match any sequence of characters except path separators.
+      regexString = regexString.replace(/\*/g, '[^/]*');
+
+      // 4. Restore globstar functionality.
+      regexString = regexString.replace(/@@GLOBSTAR_PLACEHOLDER@@/g, '.*');
+
+      // 5. Handle brace expansion e.g., {js,ts} -> (js|ts)
+      // This ensures commas are only treated as OR operators within the braces.
+      regexString = regexString.replace(/\{([^}]+)\}/g, (match, innerContent) => {
+        return '(' + innerContent.split(',').map(item => item.trim()).join('|') + ')';
+      });
+
+      // Anchor the pattern to match the whole path from start to end
+      regexString = '^' + regexString + '$';
+
+      try {
+        const regex = new RegExp(regexString);
+        return regex.test(normalizedFilePath);
+      } catch (error) {
+        console.warn(chalk.yellow(`⚠️ Invalid regex generated from pattern: "${pattern}" -> "${regexString}" (${error.message})`));
+        return false;
+      }
     });
   }
 
