@@ -292,18 +292,107 @@ export class ReviewSummarizer {
 
   addAIInsights(markdown, aiInsights, stats, reviewData) {
     if (aiInsights) {
-      // Add all AI insights sections here (abbreviated for space)
-      if (aiInsights.keyInsights && aiInsights.keyInsights.length > 0) {
-        markdown += `## 🧠 AI Key Insights\n\n`;
-        aiInsights.keyInsights.forEach((insight, i) => {
-          markdown += `${i + 1}. ${insight}\n`;
+      // Critical Action Items - What needs immediate attention
+      if (aiInsights.criticalActionItems && aiInsights.criticalActionItems.length > 0) {
+        markdown += `## 🚨 Critical Action Items\n\n`;
+        markdown += `> **These issues require immediate attention from the development team**\n\n`;
+        aiInsights.criticalActionItems.forEach((item, i) => {
+          markdown += `${i + 1}. **${item}**\n`;
+        });
+        markdown += `\n---\n\n`;
+      }
+      
+      // Recurring Patterns - Systemic issues
+      if (aiInsights.recurringPatterns && aiInsights.recurringPatterns.length > 0) {
+        markdown += `## 🔄 Recurring Patterns\n\n`;
+        markdown += `*These issues appear repeatedly across reviews and indicate systemic problems:*\n\n`;
+        aiInsights.recurringPatterns.forEach((pattern, i) => {
+          markdown += `- **${pattern}**\n`;
         });
         markdown += `\n`;
       }
       
-      // Add other AI sections similarly...
+      // Team Strengths - What's working well
+      if (aiInsights.teamStrengths && aiInsights.teamStrengths.length > 0) {
+        markdown += `## ✅ Team Strengths\n\n`;
+        markdown += `*Areas where the team excels:*\n\n`;
+        aiInsights.teamStrengths.forEach((strength, i) => {
+          markdown += `- ${strength}\n`;
+        });
+        markdown += `\n`;
+      }
+      
+      // Improvement Roadmap - Prioritized action plan
+      if (aiInsights.improvementRoadmap && aiInsights.improvementRoadmap.length > 0) {
+        markdown += `## 🗺️ Improvement Roadmap\n\n`;
+        markdown += `| Priority | Focus Area | Expected Impact | Implementation Effort |\n`;
+        markdown += `|----------|------------|-----------------|----------------------|\n`;
+        aiInsights.improvementRoadmap.forEach(item => {
+          const priorityEmoji = item.priority === 'high' ? '🔴' : item.priority === 'medium' ? '🟡' : '🟢';
+          markdown += `| ${priorityEmoji} ${item.priority.toUpperCase()} | ${item.area} | ${item.impact} | ${item.effort} |\n`;
+        });
+        markdown += `\n`;
+      }
+      
+      // Risk Assessment
+      if (aiInsights.riskAssessment) {
+        markdown += `## ⚠️ Risk Assessment\n\n`;
+        
+        if (aiInsights.riskAssessment.high && aiInsights.riskAssessment.high.length > 0) {
+          markdown += `### 🔴 High Risk Issues\n`;
+          aiInsights.riskAssessment.high.forEach(risk => markdown += `- **${risk}**\n`);
+          markdown += `\n`;
+        }
+        
+        if (aiInsights.riskAssessment.medium && aiInsights.riskAssessment.medium.length > 0) {
+          markdown += `### 🟡 Medium Risk Issues\n`;
+          aiInsights.riskAssessment.medium.forEach(risk => markdown += `- ${risk}\n`);
+          markdown += `\n`;
+        }
+        
+        if (aiInsights.riskAssessment.low && aiInsights.riskAssessment.low.length > 0) {
+          markdown += `### 🟢 Low Risk Issues\n`;
+          aiInsights.riskAssessment.low.forEach(risk => markdown += `- ${risk}\n`);
+          markdown += `\n`;
+        }
+      }
+      
+      // Specific Recommendations with timeline
+      if (aiInsights.specificRecommendations && aiInsights.specificRecommendations.length > 0) {
+        markdown += `## 💡 Specific Recommendations\n\n`;
+        markdown += `| Category | Action Required | Timeline |\n`;
+        markdown += `|----------|-----------------|----------|\n`;
+        aiInsights.specificRecommendations.forEach(rec => {
+          markdown += `| ${rec.category} | ${rec.action} | ${rec.timeline} |\n`;
+        });
+        markdown += `\n`;
+      }
+      
+      // Key Metrics and Next Steps
+      if (aiInsights.keyMetrics) {
+        markdown += `## 📊 Key Focus Areas & Next Steps\n\n`;
+        
+        if (aiInsights.keyMetrics.focusAreas) {
+          markdown += `**Top 3 Focus Areas:**\n`;
+          aiInsights.keyMetrics.focusAreas.forEach((area, i) => {
+            markdown += `${i + 1}. ${area}\n`;
+          });
+          markdown += `\n`;
+        }
+        
+        if (aiInsights.keyMetrics.trendDirection) {
+          const trendEmoji = aiInsights.keyMetrics.trendDirection === 'improving' ? '📈' : 
+                           aiInsights.keyMetrics.trendDirection === 'declining' ? '📉' : '➡️';
+          markdown += `**Quality Trend:** ${trendEmoji} ${aiInsights.keyMetrics.trendDirection}\n\n`;
+        }
+        
+        if (aiInsights.keyMetrics.nextMilestone) {
+          markdown += `**Next Quality Milestone:** ${aiInsights.keyMetrics.nextMilestone}\n\n`;
+        }
+      }
+      
     } else {
-      markdown += `## 💡 Recommendations\n\n`;
+      markdown += `## 💡 Basic Recommendations\n\n`;
       const recommendations = this.generateRecommendations(stats);
       recommendations.forEach((rec, i) => {
         markdown += `${i + 1}. **${rec.title}**: ${rec.description}\n`;
@@ -412,14 +501,9 @@ export class ReviewSummarizer {
   async generateAIInsights(reviewData, options) {
     try {
       const stats = this.calculateReviewStatistics(reviewData);
-      const analysisData = {
-        totalReviews: stats.totalReviews,
-        averageScore: stats.averageScore,
-        totalIssues: stats.totalIssues,
-        criticalIssues: stats.criticalIssues
-      };
+      const patterns = this.analyzePatterns(reviewData);
       
-      const prompt = this.buildSummaryPrompt(analysisData, [], options);
+      const prompt = this.buildSummaryPrompt(stats, patterns, reviewData, options);
       
       await this.aiReviewer.applyRateLimit();
       
@@ -438,23 +522,188 @@ export class ReviewSummarizer {
           throw new Error(`Unsupported AI provider: ${this.config.aiProvider}`);
       }
       
-      return this.aiReviewer.parseResponse(response);
+      return this.parseSummaryResponse(response);
     } catch (error) {
       console.warn(chalk.yellow('⚠️ AI analysis failed, using statistical analysis only:', error.message));
       return this.getFallbackInsights();
     }
   }
 
-  buildSummaryPrompt(stats, recentSummaries, options) {
-    return `You are an expert software engineering manager analyzing code review data.
+  analyzePatterns(reviewData) {
+    // Analyze common patterns across reviews
+    const issueFrequency = {};
+    const categoryBreakdown = {};
+    const fileTypePatterns = {};
+    const securityPatterns = [];
+    const performancePatterns = [];
+    const commonSuggestions = {};
+    
+    reviewData.forEach(review => {
+      // Count issue types
+      review.issues.forEach(issue => {
+        issueFrequency[issue.description] = (issueFrequency[issue.description] || 0) + 1;
+        categoryBreakdown[issue.category] = (categoryBreakdown[issue.category] || 0) + 1;
+      });
+      
+      // Analyze file patterns from commit message or files reviewed
+      if (review.commitMessage) {
+        const fileExtensions = (review.commitMessage.match(/\.\w+/g) || []);
+        fileExtensions.forEach(ext => {
+          fileTypePatterns[ext] = (fileTypePatterns[ext] || 0) + 1;
+        });
+      }
+      
+      // Collect security and performance patterns
+      review.security.forEach(item => securityPatterns.push(item));
+      review.performance.forEach(item => performancePatterns.push(item));
+      
+      // Track common suggestions
+      review.suggestions.forEach(suggestion => {
+        const key = suggestion.substring(0, 50); // First 50 chars as key
+        commonSuggestions[key] = (commonSuggestions[key] || 0) + 1;
+      });
+    });
+    
+    return {
+      mostCommonIssues: Object.entries(issueFrequency)
+        .sort(([,a], [,b]) => b - a)
+        .slice(0, 10)
+        .map(([issue, count]) => ({ issue, count, percentage: (count/reviewData.length*100).toFixed(1) })),
+      
+      categoryBreakdown: Object.entries(categoryBreakdown)
+        .sort(([,a], [,b]) => b - a)
+        .map(([category, count]) => ({ category, count, percentage: (count/reviewData.reduce((sum, r) => sum + r.issues.length, 0)*100).toFixed(1) })),
+      
+      fileTypePatterns: Object.entries(fileTypePatterns)
+        .sort(([,a], [,b]) => b - a)
+        .slice(0, 5),
+      
+      securityTrends: this.findCommonPatterns(securityPatterns),
+      performanceTrends: this.findCommonPatterns(performancePatterns),
+      
+      topSuggestions: Object.entries(commonSuggestions)
+        .sort(([,a], [,b]) => b - a)
+        .slice(0, 5)
+        .map(([suggestion, count]) => ({ suggestion, count }))
+    };
+  }
+  
+  findCommonPatterns(items) {
+    const patterns = {};
+    items.forEach(item => {
+      // Extract key terms and phrases
+      const words = item.toLowerCase().match(/\b\w{4,}\b/g) || [];
+      words.forEach(word => {
+        patterns[word] = (patterns[word] || 0) + 1;
+      });
+    });
+    
+    return Object.entries(patterns)
+      .filter(([word, count]) => count > 1)
+      .sort(([,a], [,b]) => b - a)
+      .slice(0, 10)
+      .map(([word, count]) => ({ pattern: word, frequency: count }));
+  }
 
-## Review Data Analysis
+  buildSummaryPrompt(stats, patterns, reviewData, options) {
+    const recentReviews = reviewData.slice(-5); // Last 5 reviews for context
+    
+    return `You are an expert software engineering manager analyzing code review data. Provide actionable insights that help teams improve their code quality and development practices.
+
+## REVIEW ANALYSIS DATA
+
+### Basic Statistics
 - Total Reviews: ${stats.totalReviews}
 - Average Quality Score: ${stats.averageScore.toFixed(1)}/10
 - Total Issues Found: ${stats.totalIssues}
 - Critical Issues: ${stats.criticalIssues}
+- High Quality Reviews (8+): ${stats.highQualityCount}/${stats.totalReviews} (${stats.highQualityPercentage.toFixed(1)}%)
 
-Please provide a comprehensive analysis in JSON format with executive summary, key insights, strengths, areas for improvement, risk assessment, and recommendations.`;
+### MOST COMMON ISSUES (Actionable Focus Areas)
+${patterns.mostCommonIssues.map(item => `- ${item.issue} (${item.count} occurrences, ${item.percentage}% of reviews)`).join('\n')}
+
+### ISSUE CATEGORY BREAKDOWN
+${patterns.categoryBreakdown.map(item => `- ${item.category}: ${item.count} issues (${item.percentage}% of total)`).join('\n')}
+
+### SECURITY TRENDS
+${patterns.securityTrends.map(item => `- "${item.pattern}" mentioned ${item.frequency} times`).join('\n')}
+
+### PERFORMANCE TRENDS  
+${patterns.performanceTrends.map(item => `- "${item.pattern}" mentioned ${item.frequency} times`).join('\n')}
+
+### RECENT REVIEW SAMPLES
+${recentReviews.map(review => `- Score: ${review.score}/10, Issues: ${review.issues.length}, Summary: ${review.summary?.substring(0, 100)}...`).join('\n')}
+
+## INSTRUCTIONS
+
+Analyze this data to provide a strategic summary that focuses on:
+
+1. **CRITICAL ACTION ITEMS**: What should the team fix immediately?
+2. **RECURRING PATTERNS**: What issues keep appearing across reviews?
+3. **TEAM STRENGTHS**: What is the team doing well?
+4. **IMPROVEMENT ROADMAP**: Prioritized list of areas to focus on
+5. **RISK ASSESSMENT**: What could cause major problems if not addressed?
+6. **SPECIFIC RECOMMENDATIONS**: Concrete steps to improve code quality
+
+Respond in JSON format:
+{
+  "executiveSummary": "<2-3 sentence strategic overview focusing on actionable insights>",
+  "criticalActionItems": ["<immediate fixes needed>"],
+  "recurringPatterns": ["<patterns that indicate systemic issues>"],
+  "teamStrengths": ["<what the team does well>"],
+  "improvementRoadmap": [
+    {"priority": "high|medium|low", "area": "<focus area>", "impact": "<expected benefit>", "effort": "<implementation difficulty>"}
+  ],
+  "riskAssessment": {
+    "high": ["<high risk issues>"],
+    "medium": ["<medium risk issues>"],
+    "low": ["<low risk issues>"]
+  },
+  "specificRecommendations": [
+    {"category": "<category>", "action": "<specific action>", "timeline": "<when to implement>"}
+  ],
+  "keyMetrics": {
+    "focusAreas": ["<top 3 areas needing attention>"],
+    "trendDirection": "<improving|stable|declining>",
+    "nextMilestone": "<next quality goal>"
+  },
+  "confidence": <1-10 integer>
+}
+
+Focus on providing insights that development teams can actually act on to improve their code quality and security.`;
+  }
+
+  parseSummaryResponse(response) {
+    try {
+      // Strip thinking tags if present  
+      let cleaned = response.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '');
+      
+      // Extract JSON from markdown code blocks if present
+      const jsonMatch = cleaned.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+      if (jsonMatch) {
+        cleaned = jsonMatch[1];
+      }
+      
+      // Find the start of JSON
+      const jsonStart = cleaned.indexOf('{');
+      if (jsonStart > -1) {
+        cleaned = cleaned.substring(jsonStart);
+      }
+      
+      const parsed = JSON.parse(cleaned);
+      
+      // Validate that we have the expected summary structure
+      if (parsed.executiveSummary || parsed.criticalActionItems || parsed.keyMetrics) {
+        return parsed;
+      } else {
+        console.warn(chalk.yellow('⚠️ AI response missing expected summary fields, using fallback'));
+        return this.getFallbackInsights();
+      }
+    } catch (error) {
+      console.warn(chalk.yellow('⚠️ Failed to parse AI summary response:', error.message));
+      console.log(chalk.gray('Raw response preview:', response?.substring(0, 200)));
+      return this.getFallbackInsights();
+    }
   }
 
   getFallbackInsights() {
