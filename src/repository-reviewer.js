@@ -387,12 +387,58 @@ export class RepositoryReviewer {
   }
 
   groupFilesForReview(files) {
-    const maxFilesPerGroup = 5;
+    const maxFilesPerGroup = 2; // Reduced from 5 to 2 to prevent truncation
+    const maxGroupSizeBytes = 25000; // Conservative size limit per group
     const groups = [];
     
-    for (let i = 0; i < files.length; i += maxFilesPerGroup) {
-      groups.push(files.slice(i, i + maxFilesPerGroup));
+    let currentGroup = [];
+    let currentGroupSize = 0;
+    
+    for (const file of files) {
+      try {
+        const stats = fs.statSync(file);
+        const fileSize = stats.size;
+        
+        // Check if adding this file would exceed limits
+        const wouldExceedCount = currentGroup.length >= maxFilesPerGroup;
+        const wouldExceedSize = currentGroupSize + fileSize > maxGroupSizeBytes;
+        
+        if ((wouldExceedCount || wouldExceedSize) && currentGroup.length > 0) {
+          // Start a new group
+          groups.push([...currentGroup]);
+          currentGroup = [file];
+          currentGroupSize = fileSize;
+        } else {
+          // Add to current group
+          currentGroup.push(file);
+          currentGroupSize += fileSize;
+        }
+      } catch (error) {
+        // If we can't stat the file, add it with conservative size estimate
+        const estimatedSize = 5000;
+        
+        if (currentGroup.length >= maxFilesPerGroup || currentGroupSize + estimatedSize > maxGroupSizeBytes) {
+          if (currentGroup.length > 0) {
+            groups.push([...currentGroup]);
+            currentGroup = [file];
+            currentGroupSize = estimatedSize;
+          } else {
+            currentGroup.push(file);
+            currentGroupSize += estimatedSize;
+          }
+        } else {
+          currentGroup.push(file);
+          currentGroupSize += estimatedSize;
+        }
+      }
     }
+    
+    // Add the last group if it has files
+    if (currentGroup.length > 0) {
+      groups.push(currentGroup);
+    }
+    
+    console.log(chalk.gray(`📊 Created ${groups.length} groups from ${files.length} files (max ${maxFilesPerGroup} files or ${maxGroupSizeBytes} bytes per group)`));
     
     return groups;
   }
