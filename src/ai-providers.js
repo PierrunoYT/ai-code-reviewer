@@ -40,14 +40,14 @@ export class AIProviders {
       messages: [
         {
           role: 'system',
-          content: 'You are an expert code reviewer. Return only valid JSON in your response.'
+          content: 'You are an expert code reviewer. You MUST return ONLY valid, complete JSON in your response. Do not include any text outside the JSON object. Ensure the JSON is properly formatted and not truncated.'
         },
         {
           role: 'user',
           content: prompt
         }
       ],
-      max_tokens: parseInt(this.config.maxTokens) || 4000,
+      max_tokens: parseInt(this.config.maxTokens) || 16000,
       temperature: 0.1,
       response_format: { type: "json_object" }
     };
@@ -79,9 +79,9 @@ export class AIProviders {
 
     const payload = {
       model: this.model,
-      max_tokens: parseInt(this.config.maxTokens) || 4000,
+      max_tokens: parseInt(this.config.maxTokens) || 16000,
       messages: messages,
-      system: "You are an expert code reviewer. Always return valid JSON in your response.",
+      system: "You are an expert code reviewer. You MUST return ONLY valid, complete JSON in your response. Do not include any text outside the JSON object. Ensure the JSON is properly formatted and not truncated.",
       temperature: 0.1
     };
 
@@ -104,13 +104,13 @@ export class AIProviders {
         {
           parts: [
             {
-              text: `You are an expert code reviewer. Return only valid JSON in your response.\n\n${prompt}`
+              text: `You are an expert code reviewer. You MUST return ONLY valid, complete JSON in your response. Do not include any text outside the JSON object. Ensure the JSON is properly formatted and not truncated.\n\n${prompt}`
             }
           ]
         }
       ],
       generationConfig: {
-        maxOutputTokens: parseInt(this.config.maxTokens) || 4000,
+        maxOutputTokens: parseInt(this.config.maxTokens) || 16000,
         temperature: 0.1,
         responseMimeType: "application/json"
       }
@@ -146,14 +146,14 @@ export class AIProviders {
         custom_id: `review-${commit.hash}`,
         params: {
           model: this.model,
-          max_tokens: parseInt(this.config.maxTokens) || 4000,
+          max_tokens: parseInt(this.config.maxTokens) || 16000,
           messages: [
             {
               role: 'user',
               content: this.buildPrompt(diffs[index], commit)
             }
           ],
-          system: "You are an expert code reviewer. Always return valid JSON in your response."
+          system: "You are an expert code reviewer. You MUST return ONLY valid, complete JSON in your response. Do not include any text outside the JSON object. Ensure the JSON is properly formatted and not truncated."
         }
       }));
 

@@ -22,11 +22,11 @@ export class ResponseParser {
       // Validate and sanitize the parsed response
       return this.validateAndSanitizeResponse(parsed);
     } catch (error) {
-      console.warn('Failed to parse AI response as JSON:', error.message);
-      console.warn('Raw response length:', response?.length);
-      console.warn('Raw response preview:', response?.substring(0, 500));
+      console.error('❌ Failed to parse AI response as JSON:', error.message);
+      console.error('Raw response length:', response?.length);
+      console.error('Raw response preview:', response?.substring(0, 500));
       
-      // Try to extract useful information from non-JSON response
+      // Return fallback response immediately without complex repair
       return this.extractFallbackResponse(response);
     }
   }

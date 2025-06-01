@@ -53,14 +53,15 @@ Please provide your analysis in the following JSON format:
   "sources": ["<sources consulted for recommendations>"]
 }
 
-Requirements:
+CRITICAL REQUIREMENTS:
+- MUST return ONLY valid JSON in the exact format shown above
+- NO additional text, explanations, or markdown formatting outside the JSON
 - Score from 1-10 (10 being excellent)
 - Confidence level from 1-10 (10 being very confident)
-- Provide specific, actionable feedback
-- Include relevant security guidelines (OWASP, NIST, etc.)
-- Consider modern best practices for the technology stack
-- Be constructive and helpful
-- Return only valid JSON`;
+- All string values must be properly escaped and quoted
+- Arrays must contain only strings
+- Do not truncate the JSON response - ensure it is complete
+- End the JSON with proper closing braces and brackets`;
 
     // Add web search context if enabled
     if (this.config.enableWebSearch) {
