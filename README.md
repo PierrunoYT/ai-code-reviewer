@@ -31,6 +31,10 @@ An intelligent code review system that analyzes your commits before creating pul
 - 📁 **Repository-Wide Review**: Analyze entire codebase with smart file filtering
 - 📈 **Commit History Analysis**: Review all commits with statistical insights and trends
 - 📊 **Review Summarization**: Generate comprehensive reports with analytics and recommendations
+- 🛡️ **Advanced Truncation Prevention**: Multi-layer system prevents response truncation
+- 🧠 **Smart Content Chunking**: Automatically handles large files and repositories
+- 🎯 **Intelligent File Grouping**: Size-aware grouping prevents token limit issues
+- 🔧 **Robust JSON Parsing**: Advanced repair logic handles partial AI responses
 - 🚀 **Easy Setup**: Simple CLI installation and configuration
 
 ## Installation
@@ -246,7 +250,7 @@ Create a `.ai-reviewer-config.json` file to customize settings:
 {
   "aiProvider": "anthropic",
   "model": "claude-sonnet-4-20250514",
-  "maxTokens": 4000,
+  "maxTokens": 64000,
   "enableWebSearch": true,
   "enableExtendedThinking": true,
   "enableCitations": true,
@@ -273,20 +277,20 @@ Create a `.ai-reviewer-config.json` file to customize settings:
     "openai": {
       "aiProvider": "openai",
       "model": "gpt-4.1",
-      "maxTokens": 4000,
+      "maxTokens": 32768,
       "enableWebSearch": true
     },
     "claude4opus": {
       "aiProvider": "anthropic",
       "model": "claude-opus-4-20250514",
-      "maxTokens": 8000,
+      "maxTokens": 32000,
       "enableExtendedThinking": true,
       "enableCitations": true
     },
     "claude37sonnet": {
       "aiProvider": "anthropic",
       "model": "claude-3-7-sonnet-20250219",
-      "maxTokens": 4000,
+      "maxTokens": 128000,
       "enableWebSearch": true,
       "enableCitations": true,
       "enableExtendedThinking": true
@@ -294,7 +298,7 @@ Create a `.ai-reviewer-config.json` file to customize settings:
     "gemini25pro": {
       "aiProvider": "google",
       "model": "gemini-2.5-pro-preview-05-06",
-      "maxTokens": 4000,
+      "maxTokens": 64000,
       "enableWebSearch": true,
       "enableCitations": true,
       "enableExtendedThinking": true
@@ -302,7 +306,7 @@ Create a `.ai-reviewer-config.json` file to customize settings:
     "gemini25flash": {
       "aiProvider": "google",
       "model": "gemini-2.5-flash-preview-05-20",
-      "maxTokens": 4000,
+      "maxTokens": 64000,
       "enableWebSearch": true,
       "enableCitations": true,
       "enableExtendedThinking": true
@@ -543,6 +547,128 @@ function login(username, password) {
 
 The analysis is **comprehensive, context-aware, and actionable** - providing expert-level code review insights with the latest security knowledge and best practices, far beyond simple syntax checking.
 
+## 🛡️ Advanced Robustness Features
+
+The AI reviewer includes several advanced features to ensure reliable performance with large repositories and complex codebases:
+
+### 🎯 Multi-Layer Truncation Prevention
+
+The system uses a comprehensive approach to prevent response truncation:
+
+1. **Smart File Grouping**: Files are grouped by both count (max 2 files) and size (max 25KB per group)
+2. **Content Chunking**: Large content is automatically split into manageable pieces (30KB chunks)
+3. **Truncation Detection**: AI responses are analyzed for incomplete sentences and cut-off content
+4. **Adaptive Retry**: When truncation is detected, content is automatically split smaller and retried
+5. **JSON Repair**: Advanced parsing logic repairs partial JSON responses from AI
+
+**Example Output:**
+```bash
+📊 Created 4 groups from 6 files (max 2 files or 25000 bytes per group)
+📄 Content size acceptable, proceeding with single review
+🔧 Using max_tokens: 64000 (config: 64000)
+
+# For larger content:
+📦 Content too large (107120 chars), splitting into chunks...
+📝 Reviewing chunk 1/3 (1 files)
+⚠️ Chunk 1 response was truncated, retrying with smaller size...
+```
+
+### 🔧 Robust JSON Parsing
+
+The response parser includes advanced repair capabilities:
+
+- **Automatic JSON extraction** from markdown code blocks
+- **Incomplete string repair** - fixes truncated text values
+- **Brace balancing** - adds missing closing brackets and braces
+- **Line-by-line analysis** - finds last complete JSON field
+- **Fallback extraction** - extracts useful data even from malformed responses
+
+### 📁 Intelligent File Pattern Matching
+
+Fixed common issues with file discovery:
+
+- **Brace expansion support**: Correctly handles patterns like `**/*.{js,ts,jsx,tsx}`
+- **Smart pattern splitting**: Respects braces when parsing comma-separated patterns
+- **Comprehensive defaults**: Includes 60+ file types and exclusion patterns
+- **Debug output**: Clear logging shows which patterns are being used
+
+**Default Include Patterns:**
+```
+**/*.{js,ts,jsx,tsx,vue,svelte}  # Web frameworks
+**/*.{py,pyw,pyi}                # Python
+**/*.{java,kt,scala}             # JVM languages
+**/*.{cpp,c,cc,cxx,h,hpp,hxx}    # C/C++
+**/*.{cs,fs,vb}                  # .NET
+**/*.{go,rs,swift,rb,php}        # Modern languages
+# ... and many more
+```
+
+### ⚙️ Enhanced Configuration Loading
+
+Improved config file discovery and loading:
+
+- **Automatic discovery**: Finds config files in current directory
+- **Higher defaults**: Default `maxTokens` increased from 16K to 64K
+- **Multiple fallbacks**: Checks `.ai-reviewer-config.json`, `.ai-reviewer-enhanced.json`, `.ai-reviewer.json`
+- **Environment override**: `AI_REVIEWER_CONFIG_PATH` environment variable
+- **Clear debugging**: Shows which config file is loaded and token limits used
+
+### 🚀 Performance Optimizations
+
+**Smart Grouping Algorithm:**
+```javascript
+// Old approach: Fixed 5 files per group
+groups = [files[0-4], files[5-9], files[10-14]]
+
+// New approach: Size-aware grouping
+groups = [
+  [small_file1, small_file2],           // Under 25KB total
+  [medium_file1],                       // Single large file
+  [small_file3, small_file4]            // Another small group
+]
+```
+
+**Adaptive Processing:**
+- Groups under 30KB → Single AI review
+- Groups over 30KB → Automatic chunking
+- Chunks with truncation → Smaller re-chunking
+- Failed chunks → Graceful fallback
+
+### 🔍 Troubleshooting Common Issues
+
+**Issue: "No code files found to review"**
+```bash
+# Check debug output for pattern matching
+🔍 Debug info: Checked 219 files in 64 directories
+Testing first sample against include patterns:
+  ".env" vs "**/*.{js,ts,jsx,tsx}" = false
+  
+# Solution: Pattern was fixed in recent update
+```
+
+**Issue: "Response truncated or incomplete"**
+```bash
+# Look for truncation prevention in action
+📦 Content too large (107120 chars), splitting into chunks...
+⚠️ Chunk 1 response was truncated, retrying with smaller size...
+
+# Automatic handling - no user action needed
+```
+
+**Issue: "JSON parsing failed"**
+```bash
+# Advanced repair kicks in automatically
+🔧 Attempting to repair truncated JSON...
+🔧 Repaired JSON from 4554 to 4547 characters
+```
+
+These features ensure the AI reviewer works reliably even with:
+- ✅ Large repositories (1000+ files)
+- ✅ Complex nested directory structures  
+- ✅ Mixed file types and sizes
+- ✅ Unstable network connections
+- ✅ API rate limits and timeouts
+
 ## 🆕 Advanced Review Commands
 
 ### Repository-Wide Code Review (`review-repo`)
@@ -550,10 +676,12 @@ The analysis is **comprehensive, context-aware, and actionable** - providing exp
 Analyze your entire codebase with AI-powered insights, perfect for code audits, onboarding new team members, or comprehensive security assessments.
 
 **Key Features:**
-- 🔍 **Smart File Discovery**: Automatically finds code files using configurable patterns
-- 📁 **Pattern Filtering**: Include/exclude files with glob-like patterns  
-- 📦 **Intelligent Grouping**: Groups files to optimize AI analysis quality
-- 🛡️ **Security Focus**: Comprehensive security analysis across entire codebase
+- 🔍 **Smart File Discovery**: Automatically finds code files using configurable patterns with advanced brace expansion
+- 📁 **Pattern Filtering**: Include/exclude files with glob-like patterns that properly handle complex expressions
+- 📦 **Intelligent Grouping**: Size-aware grouping (max 2 files or 25KB per group) prevents truncation
+- 🛡️ **Truncation Prevention**: Multi-layer system ensures complete analysis of large repositories
+- 🧠 **Content Chunking**: Automatically handles large files with smart splitting and repair logic
+- 🔒 **Security Focus**: Comprehensive security analysis across entire codebase
 - 📊 **Detailed Reports**: Individual file group reviews plus summary analytics
 
 **Usage Examples:**
@@ -578,11 +706,12 @@ npx ai-reviewer review-repo --extended-thinking --web-search --citations --markd
 - All standard AI options (provider, model, web-search, etc.)
 
 **Generated Reports:**
-- Detailed analysis for each file group (5 files per group)
-- Security vulnerability assessments
-- Code quality and maintainability insights
-- Performance optimization opportunities
-- Architecture and design pattern recommendations
+- Detailed analysis for each file group (intelligently sized groups with max 2 files or 25KB)
+- Comprehensive truncation-free reviews with automatic chunking for large files
+- Security vulnerability assessments with real-time web search integration
+- Code quality and maintainability insights with trend analysis
+- Performance optimization opportunities with specific recommendations
+- Architecture and design pattern recommendations with citations
 
 ### Commit History Analysis (`review-all-commits`)
 

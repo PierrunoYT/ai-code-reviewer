@@ -4,6 +4,11 @@ export class PromptBuilder {
   }
 
   buildPrompt(diff, commit) {
+    // Check if this is a repository review (not a commit diff)
+    if (commit.author === 'Repository Review <repo@ai-reviewer.com>' || commit.message.startsWith('Repository review')) {
+      return this.buildRepositoryPrompt(diff, commit);
+    }
+    
     // Sanitize inputs to prevent prompt injection
     const sanitizedMessage = this.sanitizeText(commit.message);
     const sanitizedAuthor = this.sanitizeText(commit.author);
@@ -80,6 +85,74 @@ CRITICAL REQUIREMENTS:
       basePrompt += `\n\nImportant: Include citations and sources for your recommendations in the 'citation' field and 'sources' array.`;
     }
 
+    return basePrompt;
+  }
+
+  buildRepositoryPrompt(fileContent, reviewInfo) {
+    // Extract file names from the review info
+    const sanitizedMessage = this.sanitizeText(reviewInfo.message);
+    const sanitizedContent = this.sanitizeText(fileContent);
+    
+    // Parse file names from the message (e.g., "Repository review - Group 1: file1.js, file2.js")
+    const fileNamesMatch = sanitizedMessage.match(/Group \d+: (.+)/);
+    const fileNames = fileNamesMatch ? fileNamesMatch[1] : 'files';
+    const groupInfo = sanitizedMessage.includes('Chunk') ? 'code chunk' : 'file group';
+    
+    let basePrompt = `You are an expert code reviewer. Please review the following ${groupInfo} containing ${fileNames} and provide comprehensive feedback.
+
+Review Type: Repository Code Analysis
+Files: ${fileNames}
+Analysis Date: ${reviewInfo.date}
+
+File Contents:
+${sanitizedContent}
+
+Please analyze these files focusing on:
+1. Code quality and maintainability
+2. Security vulnerabilities and potential threats
+3. Performance implications and optimizations
+4. Best practices adherence
+5. Testing considerations
+6. Documentation needs
+7. Accessibility considerations
+8. Dependency security and updates
+
+Please provide your analysis in the following JSON format:
+{
+  "score": <1-10 integer>,
+  "confidence": <1-10 integer>,
+  "summary": "<brief summary of the files and overall assessment>",
+  "issues": [
+    {
+      "severity": "<critical|high|medium|low>",
+      "description": "<description of the issue>",
+      "suggestion": "<how to fix it>",
+      "category": "<security|performance|quality|style|testing|documentation|accessibility|dependencies>",
+      "citation": "<source or reference if applicable>",
+      "autoFixable": <true|false>
+    }
+  ],
+  "suggestions": ["<general improvement suggestions>"],
+  "security": ["<security-specific notes>"],
+  "performance": ["<performance-specific notes>"],
+  "dependencies": ["<dependency-related notes>"],
+  "accessibility": ["<accessibility-related notes>"],
+  "sources": ["<sources consulted during review>"]
+}`;
+
+    // Add enhanced features if enabled
+    if (this.config.enableWebSearch) {
+      basePrompt += '\n\nPlease use web search to verify current best practices and security guidelines for the frameworks and libraries detected in the code.';
+    }
+    
+    if (this.config.enableCitations) {
+      basePrompt += '\n\nPlease include citations and references to official documentation, security guidelines (like OWASP), and best practice resources in your analysis.';
+    }
+    
+    if (this.config.enableExtendedThinking) {
+      basePrompt += '\n\nPlease use extended thinking to provide deep analysis and reasoning for your assessments.';
+    }
+    
     return basePrompt;
   }
 

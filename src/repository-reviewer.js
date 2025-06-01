@@ -118,7 +118,9 @@ export class RepositoryReviewer {
       '.env',
       '.env.*',
       'package-lock.json',
-      'yarn.lock'
+      'yarn.lock',
+      '.ai-reviewer-config.json',
+      '.ai-reviewer*.json'
     ];
   }
 
