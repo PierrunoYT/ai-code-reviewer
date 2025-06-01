@@ -77,11 +77,11 @@ export class AIProviders {
       messages[0].content += '\n\nPlease use extended thinking to provide deeper analysis.';
     }
 
-    // Start with a more conservative token limit for output
+    // Use a balanced token limit for output
     const configuredTokens = parseInt(this.config.maxTokens) || 16000;
-    const maxOutputTokens = Math.min(configuredTokens, 8000); // Cap at 8K for more reliable responses
+    const maxOutputTokens = Math.min(configuredTokens, 16000); // Balanced limit for comprehensive responses
     
-    console.log(`🔧 Using conservative max_tokens: ${maxOutputTokens} (config: ${this.config.maxTokens}, model: ${this.model})`);
+    console.log(`🔧 Using balanced max_tokens: ${maxOutputTokens} (config: ${this.config.maxTokens}, model: ${this.model})`);
     
     const payload = {
       model: this.model,

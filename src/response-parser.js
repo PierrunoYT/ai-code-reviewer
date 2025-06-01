@@ -9,6 +9,9 @@ export class ResponseParser {
     try {
       // Handle different response formats from different providers
       
+      // First, strip Claude's thinking tags if present
+      jsonStr = this.stripThinkingTags(jsonStr);
+      
       // Extract JSON from markdown code blocks if present
       const jsonMatch = jsonStr.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
       if (jsonMatch) {
@@ -61,6 +64,28 @@ export class ResponseParser {
       // Return fallback response immediately without complex repair
       return this.extractFallbackResponse(response);
     }
+  }
+
+  stripThinkingTags(text) {
+    // Remove Claude's thinking tags and their content
+    let cleaned = text;
+    
+    // Remove complete thinking blocks
+    cleaned = cleaned.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '');
+    
+    // Handle unclosed thinking tags (remove everything from <thinking> to the first {)
+    if (cleaned.includes('<thinking>')) {
+      const thinkingStart = cleaned.indexOf('<thinking>');
+      const firstBrace = cleaned.indexOf('{');
+      if (firstBrace > thinkingStart) {
+        cleaned = cleaned.substring(0, thinkingStart) + cleaned.substring(firstBrace);
+      }
+    }
+    
+    // Remove any remaining thinking tag fragments
+    cleaned = cleaned.replace(/<\/?thinking[^>]*>/gi, '');
+    
+    return cleaned.trim();
   }
 
   isValidJson(str) {

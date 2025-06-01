@@ -610,7 +610,7 @@ ERROR: Could not read file - ${error.message}
   }
 
   async reviewWithChunking(combinedContent, mockCommit, files) {
-    const maxContentLength = 10000; // Even more conservative to prevent truncation issues
+    const maxContentLength = 20000; // Balanced approach - allow larger files while maintaining quality
     
     // If content is small enough, proceed normally
     if (combinedContent.length <= maxContentLength) {
@@ -697,35 +697,29 @@ ERROR: Could not read file - ${error.message}
     // Check for signs of truncation in the review
     if (!review || typeof review !== 'object') return true;
     
-    // Check if summary ends abruptly
-    if (review.summary && review.summary.length > 50) {
+    // Check if summary ends abruptly (but be more lenient)
+    if (review.summary && review.summary.length > 100) {
       const lastSentence = review.summary.trim();
-      if (!lastSentence.match(/[.!?]$/)) {
+      // Only flag as truncated if it ends mid-word or with obviously incomplete text
+      if (lastSentence.length > 0 && !lastSentence.match(/[.!?:]$/) && lastSentence.split(' ').pop().length < 3) {
         return true;
       }
     }
     
-    // Check if any issue descriptions or suggestions are truncated
+    // Check if any issue descriptions are obviously truncated (more lenient)
     if (review.issues && Array.isArray(review.issues)) {
       for (const issue of review.issues) {
-        if (issue.description && issue.description.length > 20 && !issue.description.trim().match(/[.!?]$/)) {
-          return true;
-        }
-        if (issue.suggestion && issue.suggestion.length > 20 && !issue.suggestion.trim().match(/[.!?]$/)) {
-          return true;
-        }
-      }
-    }
-    
-    // Check if suggestions array has truncated items
-    if (review.suggestions && Array.isArray(review.suggestions)) {
-      for (const suggestion of review.suggestions) {
-        if (suggestion && suggestion.length > 20 && !suggestion.trim().match(/[.!?]$/)) {
-          return true;
+        if (issue.description && issue.description.length > 50) {
+          const desc = issue.description.trim();
+          // Only flag if it ends mid-word
+          if (!desc.match(/[.!?:]$/) && desc.split(' ').pop().length < 3) {
+            return true;
+          }
         }
       }
     }
     
+    // Only flag truncation for severe cases
     return false;
   }
 
