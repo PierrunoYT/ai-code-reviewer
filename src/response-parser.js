@@ -33,8 +33,15 @@ export class ResponseParser {
       
       const parsed = JSON.parse(jsonStr);
       
+      // Remove debug output that might interfere with console display
+      // console.log(`✅ Successfully parsed JSON with summary length: ${parsed.summary?.length || 0}`);
+      
       // Validate and sanitize the parsed response
-      return this.validateAndSanitizeResponse(parsed);
+      const sanitized = this.validateAndSanitizeResponse(parsed);
+      
+      // console.log(`🧹 After sanitization, summary length: ${sanitized.summary?.length || 0}`);
+      
+      return sanitized;
     } catch (error) {
       console.error('❌ Failed to parse AI response as JSON:', error.message);
       console.error('Raw response length:', response?.length);
@@ -255,7 +262,7 @@ export class ResponseParser {
     
     return str
       .trim()
-      .substring(0, 1000) // Limit length
+      .substring(0, 5000) // Increased limit from 1000 to 5000 characters
       .replace(/[\x00-\x1f\x7f-\x9f]/g, '') // Remove control characters
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');

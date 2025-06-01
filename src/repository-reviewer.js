@@ -495,7 +495,32 @@ ERROR: Could not read file - ${error.message}
     }
 
     if (review.summary) {
-      console.log(chalk.white(`\n📋 Summary: ${review.summary}`));
+      // Break long summaries into multiple lines to prevent console wrapping issues
+      const summary = review.summary;
+      const maxLineLength = 120;
+      
+      if (summary.length <= maxLineLength) {
+        console.log(chalk.white(`\n📋 Summary: ${summary}`));
+      } else {
+        console.log(chalk.white(`\n📋 Summary:`));
+        const words = summary.split(' ');
+        let currentLine = '';
+        
+        for (const word of words) {
+          if (currentLine.length + word.length + 1 <= maxLineLength) {
+            currentLine += (currentLine ? ' ' : '') + word;
+          } else {
+            if (currentLine) {
+              console.log(chalk.white(`  ${currentLine}`));
+            }
+            currentLine = word;
+          }
+        }
+        
+        if (currentLine) {
+          console.log(chalk.white(`  ${currentLine}`));
+        }
+      }
     }
 
     if (review.issues && review.issues.length > 0) {

@@ -77,14 +77,17 @@ export class AIProviders {
       messages[0].content += '\n\nPlease use extended thinking to provide deeper analysis.';
     }
 
-    const maxTokens = parseInt(this.config.maxTokens) || 16000;
-    console.log(`🔧 Using max_tokens: ${maxTokens} (config: ${this.config.maxTokens})`);
+    // Start with a more conservative token limit for output
+    const configuredTokens = parseInt(this.config.maxTokens) || 16000;
+    const maxOutputTokens = Math.min(configuredTokens, 8000); // Cap at 8K for more reliable responses
+    
+    console.log(`🔧 Using conservative max_tokens: ${maxOutputTokens} (config: ${this.config.maxTokens}, model: ${this.model})`);
     
     const payload = {
       model: this.model,
-      max_tokens: maxTokens,
+      max_tokens: maxOutputTokens,
       messages: messages,
-      system: "You are an expert code reviewer. You MUST return ONLY valid, complete JSON in your response. Do not wrap the JSON in markdown code blocks or backticks. Do not include any text outside the JSON object. Start your response directly with { and end with }. Ensure the JSON is properly formatted and not truncated.",
+      system: "You are an expert code reviewer. Return valid JSON only. Be concise but thorough.",
       temperature: 0.1
     };
 
@@ -95,7 +98,12 @@ export class AIProviders {
     };
 
     const response = await axios.post(endpoint, payload, { headers, timeout: 60000 });
-    return response.data.content[0].text;
+    const responseText = response.data.content[0].text;
+    
+    // Remove verbose debug output that might interfere with display
+    // console.log(`📊 Response stats: ${responseText.length} chars, ends with: "${responseText.slice(-50)}"`);
+    
+    return responseText;
   }
 
   async callGoogle(prompt) {
