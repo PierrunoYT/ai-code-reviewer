@@ -26,6 +26,13 @@ export class RepositoryReviewer {
       }
 
       console.log(chalk.blue(`Found ${files.length} file(s) to review`));
+      
+      // Display list of files found for review
+      console.log(chalk.cyan('\n📁 Files found for review:'));
+      files.forEach((file, index) => {
+        console.log(chalk.gray(`  ${index + 1}. ${file}`));
+      });
+      console.log(''); // Add spacing
 
       const fileGroups = this.groupFilesForReview(files);
 
